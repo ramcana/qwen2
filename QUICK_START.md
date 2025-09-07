@@ -3,6 +3,7 @@
 ## 🚀 Quick Start Commands
 
 ### First Time Setup
+
 ```bash
 cd Qwen2
 chmod +x scripts/*.sh
@@ -11,6 +12,7 @@ source scripts/activate.sh
 ```
 
 ### Daily Usage
+
 ```bash
 # Recommended: Safe start (prevents segfaults)
 ./scripts/safe_restart.sh
@@ -23,6 +25,7 @@ source scripts/activate.sh
 ```
 
 ### Troubleshooting
+
 ```bash
 # Test system health
 python tools/test_device.py
@@ -55,14 +58,14 @@ python tools/emergency_device_fix.py
 
 ## 🌐 Access Points
 
-- **UI**: http://localhost:7860
+- **UI**: <http://localhost:7860>
 - **Documentation**: `docs/README.md`
 - **Scripts Help**: `scripts/README.md`
 - **Tools Help**: `tools/README.md`
 
 ## ⚡ Performance Tips
 
-- **Best launcher**: `./scripts/safe_restart.sh` 
+- **Best launcher**: `./scripts/safe_restart.sh`
 - **Device check**: `python tools/test_device.py`
 - **Quality check**: `./scripts/lint.sh`
 - **Emergency fix**: `python tools/emergency_device_fix.py`

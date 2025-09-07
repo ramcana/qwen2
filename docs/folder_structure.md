@@ -1,9 +1,11 @@
 # Qwen-Image Local UI - Complete Folder Structure
+
 # Qwen2 Project Structure
 
 This document describes the complete folder structure of the Qwen2 Image Generator project after cleanup and organization.
 
 ## Main Project Structure
+
 ```
 Qwen2/
 ├── README.md                     # Main project documentation
@@ -89,25 +91,30 @@ Qwen2/
 ## Key Features of New Organization
 
 ### 🚀 **Launch Scripts (Recommended Order)**
+
 1. **`scripts/safe_restart.sh`** ⭐ - Prevents segmentation faults
 2. **`scripts/restart_ui.sh`** - Full diagnostic restart with comprehensive checks
 3. **`scripts/launch_ui.sh`** - Basic launcher
 
 ### 🛠️ **Diagnostic Tools**
+
 - **`tools/test_device.py`** - System health check
 - **`tools/emergency_device_fix.py`** - Emergency repairs
 
 ### 📚 **Documentation**
+
 - **`docs/README.md`** - Documentation index
 - **`docs/DEVICE_ERROR_FIX.md`** - Resolves GPU/CUDA issues
 - **`docs/UI_ACCESS_GUIDE.md`** - Browser setup for WSL2
 
 ### 🔧 **Development Tools**
+
 - **`scripts/lint.sh`** - Code quality checks
 - **`scripts/quality_gate.sh`** - CI/CD pipeline
 - **`scripts/setup.sh`** - Complete project setup
 
 ### Configuration Files Structure
+
 ```
 configs/
 ├── default_config.yaml           # Base configuration
@@ -117,6 +124,7 @@ configs/
 ```
 
 ### Generated Images Organization
+
 ```
 generated_images/
 ├── YYYYMMDD_HHMMSS_SEED.png     # Main image files
@@ -132,6 +140,7 @@ generated_images/
 ```
 
 ### Scripts Directory
+
 ```
 scripts/
 ├── install_dependencies.sh       # Automated dependency installation
@@ -143,6 +152,7 @@ scripts/
 ```
 
 ### Model Cache Structure (Hugging Face)
+
 ```
 models/Qwen--Qwen-Image/
 ├── config.json                  # Model configuration
@@ -164,19 +174,22 @@ models/Qwen--Qwen-Image/
 
 ## Quick Setup Commands
 
-### 1. Create the structure:
+### 1. Create the structure
+
 ```bash
 mkdir -p qwen-image-ui/{src/{utils,presets},generated_images/{thumbnails,gallery},models,configs,scripts,examples/{sample_prompts},docs,templates/{icons},logs,tests/{benchmarks}}
 ```
 
-### 2. Initialize the project:
+### 2. Initialize the project
+
 ```bash
 cd qwen-image-ui
 python3 -m venv venv
 source venv/bin/activate
 ```
 
-### 3. Create essential files:
+### 3. Create essential files
+
 ```bash
 touch src/__init__.py src/utils/__init__.py src/presets/__init__.py
 touch tests/__init__.py
@@ -186,6 +199,7 @@ touch README.md .gitignore .env.example
 ## Storage Requirements
 
 **Estimated Disk Usage:**
+
 - **Base installation**: ~2-3 GB (PyTorch, dependencies)
 - **Qwen-Image model**: ~40-50 GB (20B parameters)
 - **Generated images**: Variable (each ~2-5 MB depending on resolution)
@@ -195,6 +209,7 @@ touch README.md .gitignore .env.example
 ## Memory Usage Patterns
 
 **During Generation:**
+
 - **VRAM**: 12-15 GB (perfect for RTX 4080's 16GB)
 - **System RAM**: 8-12 GB (your 128GB is excellent)
 - **Disk I/O**: Moderate (model loading, image saving)

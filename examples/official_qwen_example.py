@@ -30,11 +30,11 @@ def official_qwen_example():
     if torch.cuda.is_available():
         torch_dtype = torch.bfloat16
         device = "cuda"
-        print(f"✅ Using CUDA with bfloat16")
+        print("✅ Using CUDA with bfloat16")
     else:
         torch_dtype = torch.float32
         device = "cpu"
-        print(f"⚠️ Using CPU with float32")
+        print("⚠️ Using CPU with float32")
     
     try:
         pipe = DiffusionPipeline.from_pretrained(model_name, torch_dtype=torch_dtype)
@@ -69,7 +69,7 @@ def official_qwen_example():
     # Use 16:9 ratio as in official example
     width, height = aspect_ratios["16:9"]
     
-    print(f"🎯 Generating image with official example:")
+    print("🎯 Generating image with official example:")
     print(f"   Resolution: {width}x{height}")
     print(f"   Prompt: {prompt[:80]}...")
     print(f"   Using positive magic: {positive_magic['en']}")
@@ -98,7 +98,7 @@ def official_qwen_example():
         
         image.save(filepath)
         
-        print(f"✅ Image generated successfully!")
+        print("✅ Image generated successfully!")
         print(f"📁 Saved as: {filepath}")
         print()
         print("🎯 This example demonstrates:")
