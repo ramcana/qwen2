@@ -1,0 +1,121 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Model cache (HuggingFace)
+models/
+.cache/
+transformers_cache/
+diffusers_cache/
+
+# Generated images (keep structure, ignore content)
+generated_images/*.png
+generated_images/*.jpg
+generated_images/*.jpeg
+generated_images/*.json
+generated_images/thumbnails/
+generated_images/gallery/
+
+# Logs
+logs/*.log
+logs/*.txt
+*.log
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.Zone.Identifier
+
+# PyTorch model files
+*.pth
+*.pt
+*.bin
+*.safetensors
+
+# Large files that shouldn't be in git
+*.tar.gz
+*.zip
+*.7z
+*.rar
+
+# Local configuration overrides
+configs/local_*.yaml
+configs/user_*.yaml
+
+# Performance benchmarks
+benchmarks/results/
+test_outputs/
+
+# Documentation builds
+docs/_build/
+docs/build/
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Local development
+.local/
+local_settings.py

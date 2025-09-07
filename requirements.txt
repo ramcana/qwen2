@@ -1,0 +1,50 @@
+# Python dependencies for Qwen-Image Local Generator
+# Optimized for RTX 4080 + CUDA 12.1
+
+# Core PyTorch with CUDA support
+torch>=2.1.0
+torchvision>=0.16.0
+torchaudio>=2.1.0
+
+# Diffusion models and transformers
+git+https://github.com/huggingface/diffusers.git
+transformers>=4.40.0
+accelerate>=0.20.0
+safetensors>=0.3.0
+
+# Memory optimization
+xformers>=0.0.20
+
+# Image processing
+Pillow>=9.0.0
+opencv-python>=4.8.0
+
+# Web interface
+gradio>=4.0.0
+
+# Utilities
+numpy>=1.24.0
+scipy>=1.10.0
+tqdm>=4.65.0
+requests>=2.28.0
+
+# Configuration and logging
+PyYAML>=6.0
+python-dotenv>=1.0.0
+
+# Development tools
+pytest>=7.0.0
+black>=23.0.0
+flake8>=6.0.0
+isort>=5.12.0
+mypy>=1.5.0
+bandit>=1.7.5
+pre-commit>=3.3.0
+ruff>=0.0.280
+autopep8>=2.0.0
+pylint>=2.17.0
+codespell>=2.2.5
+
+# Optional: For advanced features
+# clip-by-openai  # For CLIP-based features
+# controlnet-aux  # For ControlNet preprocessing

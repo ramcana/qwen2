@@ -1,0 +1,31 @@
+[flake8]
+max-line-length = 88
+max-complexity = 12
+extend-ignore = 
+    # Black compatibility
+    E203,  # whitespace before ':'
+    E501,  # line too long (handled by black)
+    W503,  # line break before binary operator (handled by black)
+    W504,  # line break after binary operator (handled by black)
+    # Other ignores
+    E722,  # do not use bare 'except'
+    B008,  # do not perform function calls in argument defaults
+exclude = 
+    .git,
+    __pycache__,
+    .venv,
+    venv,
+    .mypy_cache,
+    .pytest_cache,
+    build,
+    dist,
+    generated_images,
+    models,
+    *.egg-info
+per-file-ignores =
+    __init__.py:F401  # Allow unused imports in __init__.py
+    tests/*:S101      # Allow assert in tests
+select = E,W,F,B,C4,UP
+import-order-style = google
+application-import-names = src
+docstring-convention = google

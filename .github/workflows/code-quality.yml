@@ -1,0 +1,166 @@
+name: Code Quality Checks
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  code-quality:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.8, 3.9, "3.10", "3.11"]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install black isort flake8 mypy bandit ruff pytest
+        pip install -r requirements.txt || echo "Some dependencies may be optional"
+
+    - name: Check code formatting with Black
+      run: |
+        black --check --diff src/ tests/ examples/ scripts/ launch.py
+
+    - name: Check import sorting with isort
+      run: |
+        isort --check-only --diff src/ tests/ examples/ scripts/ launch.py
+
+    - name: Lint with flake8
+      run: |
+        flake8 src/ tests/ examples/ scripts/ launch.py
+
+    - name: Lint with Ruff (fast)
+      run: |
+        ruff check src/ tests/ examples/ scripts/ launch.py
+
+    - name: Type checking with MyPy
+      run: |
+        mypy src/ || echo "MyPy found type issues (non-blocking)"
+
+    - name: Security check with Bandit
+      run: |
+        bandit -r src/ -f json -o bandit-report.json || echo "Bandit security scan completed"
+
+    - name: Upload Bandit results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: bandit-results-${{ matrix.python-version }}
+        path: bandit-report.json
+
+    - name: Run automated error detection
+      run: |
+        python scripts/error_detection.py
+
+    - name: Upload error detection report
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: error-detection-report-${{ matrix.python-version }}
+        path: error_detection_report.json
+
+  test-syntax:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.10"
+
+    - name: Check Python syntax
+      run: |
+        python -m py_compile src/*.py tests/*.py examples/*.py launch.py
+
+    - name: Check for common issues
+      run: |
+        # Check for print statements in src/ (should use logging)
+        if grep -r "print(" src/; then
+          echo "Warning: print() statements found in src/. Consider using logging."
+        fi
+        
+        # Check for TODO/FIXME comments
+        if grep -r "TODO\|FIXME" src/; then
+          echo "Info: TODO/FIXME comments found in source code."
+        fi
+
+  documentation:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Check documentation files
+      run: |
+        # Check if README exists and is not empty
+        if [ ! -s README.md ]; then
+          echo "Error: README.md is missing or empty"
+          exit 1
+        fi
+        
+        # Check for basic documentation structure
+        if ! grep -q "## " README.md; then
+          echo "Warning: README.md may lack proper structure"
+        fi
+
+    - name: Spell check documentation
+      uses: streetsidesoftware/cspell-action@v2
+      with:
+        files: "**/*.md"
+        config: ".cspell.json"
+        incremental_files_only: false
+
+  hardware-simulation:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.10"
+
+    - name: Install minimal dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+
+    - name: Test hardware detection (CPU mode)
+      run: |
+        python -c "
+        import torch
+        print(f'PyTorch version: {torch.__version__}')
+        print(f'CUDA available: {torch.cuda.is_available()}')
+        print('Hardware detection test passed (CPU mode)')
+        "
+
+    - name: Test core imports
+      run: |
+        export PYTHONPATH=$PYTHONPATH:src
+        python -c "
+        try:
+            from qwen_image_config import MODEL_CONFIG
+            from qwen_generator import QwenImageGenerator
+            print('✅ Core imports successful')
+        except ImportError as e:
+            print(f'❌ Import error: {e}')
+            exit(1)
+        "

@@ -1,0 +1,216 @@
+{
+  "summary": {
+    "total_errors": 7,
+    "total_warnings": 7,
+    "total_info": 15
+  },
+  "errors": [
+    {
+      "category": "imports",
+      "message": "PyTorch not available - required for model inference",
+      "file": "",
+      "line": 0,
+      "severity": "error"
+    },
+    {
+      "category": "imports",
+      "message": "Gradio not available - required for web interface",
+      "file": "",
+      "line": 0,
+      "severity": "error"
+    },
+    {
+      "category": "imports",
+      "message": "Diffusers not available - required for model loading",
+      "file": "",
+      "line": 0,
+      "severity": "error"
+    },
+    {
+      "category": "imports",
+      "message": "Transformers not available - required for tokenization",
+      "file": "",
+      "line": 0,
+      "severity": "error"
+    },
+    {
+      "category": "imports",
+      "message": "Pillow not available - required for image processing",
+      "file": "",
+      "line": 0,
+      "severity": "error"
+    },
+    {
+      "category": "imports",
+      "message": "Core module import failed: No module named 'torch'",
+      "file": "",
+      "line": 0,
+      "severity": "error"
+    },
+    {
+      "category": "hardware",
+      "message": "❌ PyTorch not available - cannot check hardware",
+      "file": "",
+      "line": 0,
+      "severity": "error"
+    }
+  ],
+  "warnings": [
+    {
+      "category": "dependencies",
+      "message": "⚠️ Missing packages: torch, torchvision, torchaudio, transformers, accelerate, safetensors, xformers, Pillow, opencv-python, gradio, numpy, scipy, tqdm, PyYAML, python-dotenv, black, flake8, isort, mypy, bandit, pre-commit, ruff, autopep8, pylint, codespell",
+      "file": "",
+      "line": 0,
+      "severity": "warning"
+    },
+    {
+      "category": "security",
+      "message": "Use of eval() can be dangerous",
+      "file": "scripts/error_detection.py",
+      "line": 249,
+      "severity": "warning"
+    },
+    {
+      "category": "security",
+      "message": "Use of exec() can be dangerous",
+      "file": "scripts/error_detection.py",
+      "line": 250,
+      "severity": "warning"
+    },
+    {
+      "category": "security",
+      "message": "Use subprocess.run() instead of subprocess.call()",
+      "file": "scripts/error_detection.py",
+      "line": 251,
+      "severity": "warning"
+    },
+    {
+      "category": "security",
+      "message": "Avoid shell=True in subprocess calls",
+      "file": "scripts/error_detection.py",
+      "line": 252,
+      "severity": "warning"
+    },
+    {
+      "category": "security",
+      "message": "Pickle can execute arbitrary code",
+      "file": "scripts/error_detection.py",
+      "line": 253,
+      "severity": "warning"
+    },
+    {
+      "category": "security",
+      "message": "Use yaml.safe_load() instead of yaml.load()",
+      "file": "scripts/error_detection.py",
+      "line": 254,
+      "severity": "warning"
+    }
+  ],
+  "info": [
+    {
+      "category": "structure",
+      "message": "✅ Found: src/qwen_image_ui.py",
+      "file": "",
+      "line": 0,
+      "severity": "info"
+    },
+    {
+      "category": "structure",
+      "message": "✅ Found: src/qwen_generator.py",
+      "file": "",
+      "line": 0,
+      "severity": "info"
+    },
+    {
+      "category": "structure",
+      "message": "✅ Found: src/qwen_image_config.py",
+      "file": "",
+      "line": 0,
+      "severity": "info"
+    },
+    {
+      "category": "structure",
+      "message": "✅ Found: requirements.txt",
+      "file": "",
+      "line": 0,
+      "severity": "info"
+    },
+    {
+      "category": "structure",
+      "message": "✅ Found: README.md",
+      "file": "",
+      "line": 0,
+      "severity": "info"
+    },
+    {
+      "category": "structure",
+      "message": "✅ Found: launch.py",
+      "file": "",
+      "line": 0,
+      "severity": "info"
+    },
+    {
+      "category": "structure",
+      "message": "✅ Found: src/",
+      "file": "",
+      "line": 0,
+      "severity": "info"
+    },
+    {
+      "category": "structure",
+      "message": "✅ Found: generated_images/",
+      "file": "",
+      "line": 0,
+      "severity": "info"
+    },
+    {
+      "category": "structure",
+      "message": "✅ Found: configs/",
+      "file": "",
+      "line": 0,
+      "severity": "info"
+    },
+    {
+      "category": "structure",
+      "message": "✅ Found: scripts/",
+      "file": "",
+      "line": 0,
+      "severity": "info"
+    },
+    {
+      "category": "structure",
+      "message": "✅ Found: docs/",
+      "file": "",
+      "line": 0,
+      "severity": "info"
+    },
+    {
+      "category": "config",
+      "message": "✅ TOML configuration found",
+      "file": "",
+      "line": 0,
+      "severity": "info"
+    },
+    {
+      "category": "config",
+      "message": "✅ Flake8 linting config found",
+      "file": "",
+      "line": 0,
+      "severity": "info"
+    },
+    {
+      "category": "config",
+      "message": "✅ MyPy type checking config found",
+      "file": "",
+      "line": 0,
+      "severity": "info"
+    },
+    {
+      "category": "models",
+      "message": "ℹ️ Models directory not found (will be created on first run)",
+      "file": "",
+      "line": 0,
+      "severity": "info"
+    }
+  ]
+}

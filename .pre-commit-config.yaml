@@ -1,0 +1,130 @@
+# Pre-commit hooks configuration for Qwen-Image project
+# Ensures code quality before commits
+
+repos:
+  # Black code formatter
+  - repo: https://github.com/psf/black
+    rev: 23.7.0
+    hooks:
+      - id: black
+        language_version: python3
+        args: [--line-length=88]
+        exclude: ^(generated_images/|models/|venv/)
+
+  # isort import sorter
+  - repo: https://github.com/pycqa/isort
+    rev: 5.12.0
+    hooks:
+      - id: isort
+        args: [--profile=black, --line-length=88]
+        exclude: ^(generated_images/|models/|venv/)
+
+  # Ruff linter (faster alternative to flake8)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.0.280
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+        exclude: ^(generated_images/|models/|venv/)
+
+  # MyPy type checking
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.5.1
+    hooks:
+      - id: mypy
+        additional_dependencies: [types-PyYAML, types-requests]
+        exclude: ^(tests/|generated_images/|models/|venv/)
+        args: [--ignore-missing-imports]
+
+  # Bandit security linter
+  - repo: https://github.com/pycqa/bandit
+    rev: 1.7.5
+    hooks:
+      - id: bandit
+        args: [-r, --format=custom, --msg-template='{abspath}:{line}: {test_id}[bandit]: {severity}: {msg}']
+        exclude: ^(tests/|generated_images/|models/|venv/)
+
+  # General pre-commit hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      # File format checks
+      - id: trailing-whitespace
+        exclude: ^(generated_images/|models/)
+      - id: end-of-file-fixer
+        exclude: ^(generated_images/|models/)
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+        exclude: ^(generated_images/.*\.json|models/)
+      
+      # Python-specific checks
+      - id: check-ast
+      - id: check-builtin-literals
+      - id: check-docstring-first
+      - id: debug-statements
+      - id: name-tests-test
+        args: [--pytest-test-first]
+      
+      # Security and best practices
+      - id: check-added-large-files
+        args: [--maxkb=10240]  # 10MB limit
+      - id: check-merge-conflict
+      - id: check-executables-have-shebangs
+      - id: mixed-line-ending
+        args: [--fix=lf]
+
+  # Spell checking
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.2.5
+    hooks:
+      - id: codespell
+        args: [--skip="*.log,*.json,venv,generated_images,models"]
+
+  # YAML formatting
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v3.0.0
+    hooks:
+      - id: prettier
+        types: [yaml]
+        exclude: ^(generated_images/|models/)
+
+  # Shell script linting
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.9.0.5
+    hooks:
+      - id: shellcheck
+        args: [--severity=warning]
+
+# Configuration
+default_stages: [commit]
+fail_fast: false
+exclude: ^(generated_images/|models/|venv/|\.git/)
+
+# Custom local hooks
+repos:
+  - repo: local
+    hooks:
+      # Custom hardware check
+      - id: cuda-check
+        name: CUDA availability check
+        entry: python -c "import torch; print('CUDA available:', torch.cuda.is_available())"
+        language: system
+        pass_filenames: false
+        stages: [manual]
+
+      # Import check
+      - id: import-check
+        name: Check core imports
+        entry: python -c "import sys; sys.path.append('src'); from qwen_image_config import MODEL_CONFIG; from qwen_generator import QwenImageGenerator; print('✅ Core imports OK')"
+        language: system
+        pass_filenames: false
+        files: ^src/.*\.py$
+
+      # File size check for models
+      - id: model-size-check
+        name: Check for large model files
+        entry: bash -c 'find . -name "*.bin" -o -name "*.safetensors" -o -name "*.pt" -o -name "*.pth" | xargs -I {} sh -c "echo {}; ls -lh {}" | grep -E "\s+[0-9]+[.,][0-9]*[GM]\s+" || true'
+        language: system
+        pass_filenames: false
+        stages: [manual]
