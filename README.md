@@ -1,226 +1,118 @@
-# Qwen-Image Local Generator 🎨
+# Qwen-Image Full-Stack Generator 🎨
 
-A professional text-to-image generation system using the Qwen-Image model, optimized for high-end hardware with local deployment capabilities.
+A professional, locally-run text-to-image generation system using the Qwen-Image model, featuring a modern full-stack architecture with a FastAPI backend and a React/Tailwind CSS frontend.
 
 ## Features
 
-- **Advanced Text Rendering**: Specialized in generating text within images with high accuracy
-- **Multi-language Support**: English and Chinese text generation
-- **Hardware Optimized**: Specifically tuned for RTX 4080 + AMD Threadripper setup
-- **Professional UI**: Complete Gradio web interface with advanced controls
-- **Local Deployment**: No cloud dependencies, complete privacy
-- **Metadata Management**: Automatic saving of generation parameters
-- **Multiple Presets**: Quality, aspect ratio, and style presets
+- **Modern UI**: A sleek and responsive user interface built with React and Tailwind CSS.
+- **Advanced Controls**: Professional options for image generation, including multiple modes (Text-to-Image, Image-to-Image, Inpainting, Super-Resolution).
+- **Style Picker**: Choose from a variety of professional styles to enhance your creations.
+- **FastAPI Backend**: A robust and fast backend server that exposes the power of the Qwen-Image model through a REST API.
+- **Local & Private**: All processing happens on your local machine, ensuring privacy and control.
+- **Hardware Optimized**: Tuned for high-end hardware for optimal performance.
+
+## Architecture
+
+This project consists of two main components:
+
+-   **`backend/`**: A Python application powered by **FastAPI**. It handles the core image generation logic using the `diffusers` library and the Qwen-Image models. It exposes several API endpoints for the frontend to consume.
+-   **`frontend/`**: A modern single-page application (SPA) built with **React** and styled with **Tailwind CSS**. It provides a user-friendly interface for interacting with the image generation capabilities of the backend.
+
+The two components run concurrently and communicate via a REST API.
 
 ## System Requirements
 
+The system requirements are the same as the original project, with a focus on high-end hardware for the best experience.
+
 ### Recommended Hardware
 
-- **GPU**: RTX 4080 (16GB VRAM) or better
-- **CPU**: AMD Threadripper or equivalent high-core-count processor
-- **RAM**: 32GB minimum, 128GB recommended
-- **Storage**: 60-70GB free space for models and generated images
-
-### Software Requirements
-
-- **OS**: Ubuntu 20.04+ or WSL2 with Ubuntu
-- **Python**: 3.8+ (3.10+ recommended)
-- **CUDA**: 12.1 or compatible
-- **PyTorch**: 2.1.0+
+-   **GPU**: NVIDIA RTX 4080 (16GB VRAM) or better
+-   **CPU**: High-core-count processor (e.g., AMD Threadripper)
+-   **RAM**: 32GB minimum, 128GB recommended
+-   **Storage**: 60-70GB for models and generated images
 
 ## Quick Start
 
-### 🚀 **Easy Launch Options**
+### 1. Setup
 
-#### Interactive Launcher (Recommended)
+**Backend:**
+
+First, set up the Python environment and install the required dependencies.
+
 ```bash
-# Choose your interface interactively
+# Navigate to the backend directory
+cd backend
+
+# Create and activate a virtual environment (recommended)
+python3 -m venv venv
 source venv/bin/activate
+
+# Install Python dependencies
+pip install -r requirements.txt
+```
+
+**Frontend:**
+
+Next, set up the Node.js environment for the React application.
+
+```bash
+# Navigate to the frontend directory
+cd frontend
+
+# Install Node.js dependencies
+npm install
+```
+
+### 2. Launch the Application
+
+A convenient launch script is provided to start both the backend and frontend servers concurrently.
+
+```bash
+# From the backend directory
 python launch.py
 ```
 
-#### Direct Launch Commands
+This will:
+-   Start the FastAPI backend server on `http://localhost:8000`.
+-   Start the React frontend development server on `http://localhost:3000`.
+
+Open your browser and navigate to **`http://localhost:3000`** to use the application.
+
+## Development
+
+If you want to run the servers independently for development purposes:
+
+**To run the backend:**
+
 ```bash
-# Standard UI (Text-to-Image only)
-python launch.py --mode standard
-
-# Enhanced UI (All features)
-python launch.py --mode enhanced
-
-# Shell script with menu
-./scripts/launch_ui.sh
-
-# Direct enhanced launch
-./scripts/restart_enhanced.sh
+cd backend/src
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### 🛡️ **Safe Restart Options**
-```bash
-# Safe restart with UI choice
-./scripts/safe_restart.sh
+**To run the frontend:**
 
-# Direct enhanced safe restart
-./scripts/restart_enhanced.sh
+```bash
+cd frontend
+npm run dev -- --port 3000
 ```
 
 ## Project Structure
 
 ```
-Qwen2/
-├── src/                    # Main application code
-│   ├── qwen_image_ui.py   # Gradio web interface
-│   ├── qwen_generator.py  # Core generation logic
-│   ├── qwen_image_config.py # Configuration settings
-│   ├── utils/             # Utility modules
-│   └── presets/           # Preset configurations
-├── scripts/               # All automation scripts
-│   ├── safe_restart.sh    # Recommended launcher (prevents segfaults)
-│   ├── restart_ui.sh      # Full diagnostic restart
-│   ├── activate.sh        # Environment activation
-│   ├── setup.sh           # Project setup
-│   └── lint.sh            # Code quality checks
-├── docs/                  # Complete documentation
-│   ├── README.md          # Documentation index
-│   ├── DEVICE_ERROR_FIX.md # GPU troubleshooting
-│   ├── UI_ACCESS_GUIDE.md  # UI setup guide
-│   └── ...                # Additional guides
-├── tools/                 # Diagnostic and utility tools
-│   ├── test_device.py     # Device diagnostics
-│   └── emergency_device_fix.py # Emergency repairs
-├── reports/               # Generated reports and logs
-├── configs/               # Configuration files
-├── generated_images/      # Output directory
-└── tests/                 # Test suite
+/
+├── backend/                # FastAPI backend application
+│   ├── src/
+│   │   ├── main.py         # FastAPI app definition
+│   │   └── qwen_generator.py # Core generation logic
+│   ├── launch.py           # Script to launch the full-stack app
+│   └── requirements.txt
+│
+├── frontend/               # React frontend application
+│   ├── src/
+│   │   ├── App.jsx         # Main React component
+│   │   ├── components/     # UI components
+│   │   └── api.js          # API client
+│   └── package.json
+│
+└── README.md               # This file
 ```
-
-## Usage Examples
-
-### Basic Generation
-
-```python
-from src.qwen_generator import QwenImageGenerator
-
-generator = QwenImageGenerator()
-generator.load_model()
-
-image, message = generator.generate_image(
-    prompt="A coffee shop with a sign reading 'AI Café'",
-    width=1664,
-    height=928
-)
-```
-
-### Advanced Settings
-
-```python
-image, message = generator.generate_image(
-    prompt="Modern art gallery with text 'Innovation 2025'",
-    negative_prompt="blurry, low quality",
-    width=1472,
-    height=1140,
-    num_inference_steps=80,
-    cfg_scale=7.0,
-    seed=42,
-    language="en"
-)
-```
-
-## Configuration
-
-### Hardware Optimization
-
-The system automatically detects and optimizes for your hardware:
-
-- **RTX 4080**: Uses bfloat16 precision, attention slicing
-- **High RAM**: Enables larger batch processing
-- **CUDA 12.1**: Optimized PyTorch installation
-
-### Quality Presets
-
-- **Fast**: 20 steps, CFG 3.0 (~15-20 seconds)
-- **Balanced**: 50 steps, CFG 4.0 (~30-40 seconds)
-- **High**: 80 steps, CFG 7.0 (~50-60 seconds)
-
-### Aspect Ratios
-
-- Square (1:1): 1328×1328
-- Landscape (16:9): 1664×928
-- Portrait (9:16): 928×1664
-- Photo (4:3): 1472×1140
-- Ultra-wide (21:9): 1792×768
-
-## Performance
-
-### Expected Generation Times (RTX 4080)
-
-| Quality | Steps | Time | Use Case |
-|---------|-------|------|----------|
-| Fast | 20 | 15-20s | Quick previews |
-| Balanced | 50 | 30-40s | General use |
-| High | 80 | 50-60s | Final quality |
-
-### Memory Usage
-
-- **VRAM**: 12-15GB during generation
-- **System RAM**: 8-12GB active usage
-- **Storage**: ~2-5MB per generated image
-
-## Troubleshooting
-
-### Quick Diagnostics
-
-```bash
-# Test system compatibility
-python tools/test_device.py
-
-# Emergency device fixes
-python tools/emergency_device_fix.py
-
-# Safe restart (prevents segfaults)
-./scripts/safe_restart.sh
-```
-
-### Common Issues
-
-1. **Segmentation Fault**: Use `./scripts/safe_restart.sh` instead of direct launch
-2. **CUDA Out of Memory**: Reduce image size or enable CPU offload
-3. **Model Download Slow**: Use HuggingFace cache or local mirror
-4. **Generation Fails**: Check PyTorch CUDA installation
-
-### Documentation
-
-- 📚 **Complete guides**: See `docs/` directory
-- 🔧 **Device issues**: `docs/DEVICE_ERROR_FIX.md`
-- 🌐 **UI access**: `docs/UI_ACCESS_GUIDE.md`
-- 🖥️ **WSL2 setup**: `docs/WSL2_BROWSER_SETUP.md`
-
-### Performance Tips
-
-- **Use safe restart**: `./scripts/safe_restart.sh` prevents crashes
-- **Diagnostic tools**: Run `python tools/test_device.py` for health checks
-- Use bfloat16 precision for RTX 40-series GPUs
-- Enable attention slicing for memory efficiency
-- Keep VRAM usage under 14GB for stability
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Test your changes thoroughly
-4. Submit a pull request
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Acknowledgments
-
-- **Qwen Team**: For the amazing Qwen-Image model
-- **Hugging Face**: For the diffusers library
-- **Gradio**: For the web interface framework
-
----
-
-**Hardware Optimized**: Specifically tuned for RTX 4080 + AMD Threadripper setups
-**Local Privacy**: All processing happens on your hardware
-**Professional Quality**: Production-ready text-to-image generation
