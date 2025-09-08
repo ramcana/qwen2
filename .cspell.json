@@ -67,7 +67,12 @@
     "linting",
     "docstring",
     "unittest",
-    "pytest"
+    "pytest",
+    "inpainting",
+    "inpaint",
+    "Ryzen",
+    "inbrowser",
+    "redoc"
   ],
   "ignorePaths": [
     "node_modules/**",

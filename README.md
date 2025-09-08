@@ -167,6 +167,29 @@ The system automatically detects and optimizes for your hardware:
 
 ## Troubleshooting
 
+### CUDA Memory Management (⭐ NEW IMPLEMENTATION)
+
+We've implemented a comprehensive solution for CUDA out of memory errors:
+
+```bash
+# One-click fix for CUDA memory issues
+python tools/fix_cuda_memory.py
+
+# Manual memory-safe download
+python tools/download_qwen_edit_memory_safe.py
+
+# Test memory-optimized loading
+python test_qwen_edit_fix.py
+```
+
+**Key Features:**
+- ✅ Automatic GPU memory clearing
+- ✅ Memory-optimized model loading with device mapping
+- ✅ VRAM reservation (12GB model + 4GB system)
+- ✅ Integration testing and verification
+
+**Implementation Details:** See [`docs/CUDA_MEMORY_IMPLEMENTATION_PLAN.md`](docs/CUDA_MEMORY_IMPLEMENTATION_PLAN.md)
+
 ### Quick Diagnostics
 
 ```bash

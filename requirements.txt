@@ -19,8 +19,11 @@ xformers>=0.0.20
 Pillow>=9.0.0
 opencv-python>=4.8.0
 
-# Web interface
+# Web interfaces
 gradio>=4.0.0
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.4.0
 
 # Utilities
 numpy>=1.24.0

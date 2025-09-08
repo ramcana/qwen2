@@ -27,6 +27,26 @@ def initialize_model():
     else:
         return "❌ Failed to load model. Check console for errors."
 
+def generate_image_ui(prompt, negative_prompt, width, height, steps, cfg_scale, 
+                     seed, language, enhance_prompt):
+    """UI wrapper for text-to-image generation"""
+    if not prompt.strip():
+        return None, "Please enter a prompt to generate an image."
+    
+    image, message = qwen_generator.generate_image(
+        prompt=prompt,
+        negative_prompt=negative_prompt,
+        width=width,
+        height=height,
+        num_inference_steps=steps,
+        cfg_scale=cfg_scale,
+        seed=seed,
+        language=language,
+        enhance_prompt_flag=enhance_prompt
+    )
+    
+    return image, message
+
 def generate_img2img_ui(prompt, negative_prompt, init_image, strength, width, height, 
                        steps, cfg_scale, seed, language, enhance_prompt):
     """UI wrapper for image-to-image generation"""
@@ -338,6 +358,6 @@ if __name__ == "__main__":
         server_name="0.0.0.0",
         server_port=7860,
         share=False,  # Set True for public access
-        inbrowser=False,  # Disabled for WSL2 compatibility
+        in_browser=False,  # Disabled for WSL2 compatibility
         max_file_size="50mb"
     )

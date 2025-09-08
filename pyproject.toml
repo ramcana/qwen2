@@ -7,10 +7,8 @@ name = "qwen-image-generator"
 description = "Professional text-to-image generation using Qwen-Image model"
 readme = "README.md"
 requires-python = ">=3.8"
-license = {text = "MIT"}
-authors = [
-    {name = "Qwen-Image Team"},
-]
+license = { text = "MIT" }
+authors = [{ name = "Qwen-Image Team" }]
 keywords = ["ai", "image-generation", "text-to-image", "qwen", "gradio"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -55,7 +53,14 @@ profile = "black"
 multi_line_output = 3
 line_length = 88
 known_first_party = ["src"]
-known_third_party = ["torch", "gradio", "diffusers", "transformers", "PIL", "numpy"]
+known_third_party = [
+    "torch",
+    "gradio",
+    "diffusers",
+    "transformers",
+    "PIL",
+    "numpy",
+]
 sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
 skip_glob = ["**/generated_images/**", "**/models/**", "**/venv/**"]
 
@@ -74,13 +79,7 @@ warn_unused_ignores = true
 warn_no_return = true
 warn_unreachable = true
 strict_equality = true
-exclude = [
-    "venv/",
-    "build/",
-    "dist/",
-    "generated_images/",
-    "models/",
-]
+exclude = ["venv/", "build/", "dist/", "generated_images/", "models/"]
 
 [[tool.mypy.overrides]]
 module = [
@@ -98,12 +97,7 @@ testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = [
-    "--verbose",
-    "--tb=short",
-    "--strict-markers",
-    "--disable-warnings",
-]
+addopts = ["--verbose", "--tb=short", "--strict-markers", "--disable-warnings"]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "gpu: marks tests that require GPU",
@@ -113,12 +107,7 @@ markers = [
 # Coverage configuration
 [tool.coverage.run]
 source = ["src"]
-omit = [
-    "*/tests/*",
-    "*/venv/*",
-    "*/build/*",
-    "*/dist/*",
-]
+omit = ["*/tests/*", "*/venv/*", "*/build/*", "*/dist/*"]
 
 [tool.coverage.report]
 exclude_lines = [
@@ -138,22 +127,17 @@ exclude_lines = [
 [tool.ruff]
 line-length = 88
 target-version = "py38"
-extend-exclude = [
-    "generated_images",
-    "models",
-    "venv",
-    ".venv",
-]
+extend-exclude = ["generated_images", "models", "venv", ".venv"]
 
 [tool.ruff.lint]
 select = [
-    "E",  # pycodestyle errors
-    "W",  # pycodestyle warnings
-    "F",  # pyflakes
-    "I",  # isort
-    "B",  # flake8-bugbear
-    "C4", # flake8-comprehensions
-    "UP", # pyupgrade
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
     "ARG", # flake8-unused-arguments
     "SIM", # flake8-simplify
     "ICN", # flake8-import-conventions
@@ -162,12 +146,12 @@ ignore = [
     "E501", # line too long (handled by black)
     "B008", # do not perform function calls in argument defaults
     "B904", # Allow raise without from in except blocks
-    "W503", # line break before binary operator (handled by black)
+    "W504", # prefer Black's style; ignore "line break after binary operator"
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"__init__.py" = ["F401"]  # Allow unused imports in __init__.py
-"tests/*" = ["ARG", "S101"]  # Allow unused arguments and assert in tests
+"__init__.py" = ["F401"]    # Allow unused imports in __init__.py
+"tests/*" = ["ARG", "S101"] # Allow unused arguments and assert in tests
 
 [tool.ruff.format]
 quote-style = "double"

@@ -1,0 +1,27 @@
+{
+  "ui_mode": "both",
+  "gradio": {
+    "enabled": true,
+    "port": 7860,
+    "host": "0.0.0.0",
+    "share": false,
+    "inbrowser": false
+  },
+  "react": {
+    "enabled": true,
+    "dev_port": 3000,
+    "build_dir": "frontend/build"
+  },
+  "api": {
+    "enabled": true,
+    "port": 8000,
+    "host": "0.0.0.0",
+    "auto_start": true
+  },
+  "features": {
+    "memory_optimization": true,
+    "request_queuing": true,
+    "performance_monitoring": true,
+    "background_cleanup": true
+  }
+}
