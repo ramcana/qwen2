@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test Qwen-Image-Edit Loading with Fixed Configuration
+Test Qwen-Image-Edit integration with memory optimization
 """
 
 import os
@@ -8,114 +8,95 @@ import sys
 
 import torch
 
-# Add src directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+# Add src to path
+sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 
-def test_qwen_edit_loading():
-    """Test the fixed Qwen-Image-Edit loading"""
-    print("🧪 Testing fixed Qwen-Image-Edit loading...")
-    print("=" * 50)
+def test_qwen_edit_integration():
+    """Test Qwen-Image-Edit integration with the main system"""
+    
+    print("🧪 Testing Qwen-Image-Edit Integration")
+    print("=" * 40)
     
     try:
-        # Check if diffusers is available
-        from diffusers import QwenImageEditPipeline
-        print("✅ QwenImageEditPipeline available")
+        # Import configurations
+        from qwen_edit_config import (
+            apply_memory_optimizations,
+            clear_gpu_cache,
+            get_memory_optimized_config,
+        )
+
+        # Clear GPU cache first
+        clear_gpu_cache()
         
-        # Test basic loading (without device_map="auto")
-        print("📥 Testing model loading with fixed configuration...")
+        # Get optimized config
+        config = get_memory_optimized_config()
+        print(f"🔧 Using config: device_map={config.get('device_map')}, max_memory={config.get('max_memory')}")
         
-        pipeline = QwenImageEditPipeline.from_pretrained(
+        # Import pipeline
+        from diffusers import DiffusionPipeline
+        
+        print("📦 Loading Qwen-Image-Edit pipeline...")
+        
+        # Load with optimized settings
+        pipeline = DiffusionPipeline.from_pretrained(
             "Qwen/Qwen-Image-Edit",
-            torch_dtype=torch.bfloat16,
-            low_cpu_mem_usage=False,  # Better for 128GB RAM
-            resume_download=True,
-            use_safetensors=True,
-            local_files_only=True     # Only test if already downloaded
+            torch_dtype=config["torch_dtype"],
+            device_map=config.get("device_map"),
+            max_memory=config.get("max_memory"),
+            low_cpu_mem_usage=config["low_cpu_mem_usage"],
+            cache_dir=config["cache_dir"]
         )
         
-        print("✅ Model loading successful!")
+        # Apply optimizations
+        pipeline = apply_memory_optimizations(pipeline)
         
-        # Test device movement
+        print("✅ Pipeline loaded successfully!")
+        
+        # Check pipeline components
+        components = []
+        if hasattr(pipeline, 'vae'):
+            components.append(f"VAE: {pipeline.vae.device}")
+        if hasattr(pipeline, 'text_encoder'):
+            components.append(f"Text Encoder: {pipeline.text_encoder.device}")
+        if hasattr(pipeline, 'unet'):
+            components.append(f"UNet: {pipeline.unet.device}")
+        if hasattr(pipeline, 'scheduler'):
+            components.append("Scheduler: present")
+        
+        print("🔍 Pipeline components:")
+        for component in components:
+            print(f"  • {component}")
+        
+        # Check memory usage
         if torch.cuda.is_available():
-            print("🔄 Testing GPU movement...")
-            pipeline = pipeline.to("cuda")
-            print("✅ GPU movement successful!")
-            
-            # Check component devices
-            components = ['unet', 'vae', 'text_encoder']
-            for comp_name in components:
-                if hasattr(pipeline, comp_name):
-                    component = getattr(pipeline, comp_name)
-                    if component is not None:
-                        try:
-                            device = str(next(component.parameters()).device)
-                            print(f"   {comp_name.upper()}: {device}")
-                        except Exception:
-                            print(f"   {comp_name.upper()}: device check failed")
+            allocated = torch.cuda.memory_allocated(0)
+            total = torch.cuda.get_device_properties(0).total_memory
+            print(f"📊 VRAM usage: {allocated/1e9:.1f}GB / {total/1e9:.1f}GB ({100*allocated/total:.1f}%)")
         
+        # Clean up
         del pipeline
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        clear_gpu_cache()
         
-        print("\n🎉 All tests passed! Qwen-Image-Edit should work correctly now.")
+        print("✅ Integration test passed!")
         return True
         
     except Exception as e:
-        error_msg = str(e)
-        print(f"❌ Test failed: {e}")
-        
-        if "local_files_only" in error_msg:
-            print("\n💡 Model not downloaded yet. Run:")
-            print("python tools/download_qwen_edit_hub.py")
-        elif "auto not supported" in error_msg:
-            print("\n❌ device_map issue still present!")
-        else:
-            print(f"\n💡 Error type: {type(e).__name__}")
-        
+        print(f"❌ Integration test failed: {e}")
         return False
 
-def test_generator_integration():
-    """Test with the actual generator class"""
-    print("\n🔧 Testing QwenImageGenerator integration...")
+def main():
+    """Main test function"""
+    success = test_qwen_edit_integration()
     
-    try:
-        from qwen_generator import QwenImageGenerator
-        
-        generator = QwenImageGenerator()
-        success = generator.load_model()
-        
-        if success:
-            if generator.edit_pipe:
-                print("✅ Enhanced features loaded successfully!")
-            else:
-                print("⚠️ Basic model loaded, enhanced features need download")
-        else:
-            print("❌ Model loading failed")
-            
-        return success
-        
-    except Exception as e:
-        print(f"❌ Generator integration failed: {e}")
-        return False
+    if success:
+        print("\n🎉 Qwen-Image-Edit is ready for use!")
+        print("💡 You can now use enhanced features in your UI")
+    else:
+        print("\n❌ Integration test failed")
+        print("💡 Check the error messages above")
+    
+    return success
 
 if __name__ == "__main__":
-    print("🎯 Qwen-Image-Edit Fix Verification")
-    print("=" * 50)
-    
-    # Test 1: Direct pipeline loading
-    test1_success = test_qwen_edit_loading()
-    
-    # Test 2: Generator integration
-    test2_success = test_generator_integration()
-    
-    print("\n" + "=" * 50)
-    print("📋 Test Results:")
-    print(f"   Direct loading: {'✅ PASS' if test1_success else '❌ FAIL'}")
-    print(f"   Generator integration: {'✅ PASS' if test2_success else '❌ FAIL'}")
-    
-    if test1_success and test2_success:
-        print("\n🎉 All tests passed! The fix is working correctly.")
-    elif not test1_success:
-        print("\n🔧 Run the download first: python tools/download_qwen_edit_hub.py")
-    else:
-        print("\n⚠️ Some issues remain. Check the error messages above.")
+    success = main()
+    sys.exit(0 if success else 1)
