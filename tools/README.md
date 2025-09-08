@@ -30,6 +30,22 @@ Model Setup: ✅ PASS
 🎉 All tests passed! Device setup is correct.
 ```
 
+#### `download_qwen_edit.py`
+**Purpose**: Download and verify Qwen-Image-Edit model
+**Usage**:
+```bash
+cd /home/ramji_t/projects/Qwen2
+source venv/bin/activate
+python tools/download_qwen_edit.py
+```
+
+**What it does**:
+- 📥 Downloads Qwen-Image-Edit model (~20GB)
+- 📊 Shows download progress and estimated time
+- ✅ Verifies successful installation
+- 🔧 Provides troubleshooting guidance
+- 💾 Manages model cache efficiently
+
 ### 🚨 **Emergency Fixes**
 
 #### `emergency_device_fix.py`
@@ -55,6 +71,12 @@ python tools/emergency_device_fix.py
 - Verifying system compatibility
 - Diagnosing basic device issues
 - Regular system health checks
+
+### Use `download_qwen_edit.py` when:
+- Setting up enhanced features for the first time
+- "Qwen-Image-Edit pipeline not loaded" error appears
+- Want to enable image-to-image and inpainting features
+- Need to re-download the model after cache issues
 
 ### Use `emergency_device_fix.py` when:
 - Experiencing persistent device errors

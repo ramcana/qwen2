@@ -30,30 +30,38 @@ A professional text-to-image generation system using the Qwen-Image model, optim
 
 ## Quick Start
 
-### 1. Installation
+### 🚀 **Easy Launch Options**
 
+#### Interactive Launcher (Recommended)
 ```bash
-# Clone and setup
-cd Qwen2
-chmod +x scripts/*.sh
-./scripts/setup.sh
+# Choose your interface interactively
+source venv/bin/activate
+python launch.py
 ```
 
-### 2. Activate Environment
-
+#### Direct Launch Commands
 ```bash
-source scripts/activate.sh
+# Standard UI (Text-to-Image only)
+python launch.py --mode standard
+
+# Enhanced UI (All features)
+python launch.py --mode enhanced
+
+# Shell script with menu
+./scripts/launch_ui.sh
+
+# Direct enhanced launch
+./scripts/restart_enhanced.sh
 ```
 
-### 3. Run the UI (Safe Mode - Recommended)
-
+### 🛡️ **Safe Restart Options**
 ```bash
+# Safe restart with UI choice
 ./scripts/safe_restart.sh
+
+# Direct enhanced safe restart
+./scripts/restart_enhanced.sh
 ```
-
-### 4. Access Interface
-
-Open your browser to: <http://localhost:7860>
 
 ## Project Structure
 

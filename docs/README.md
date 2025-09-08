@@ -8,10 +8,18 @@ Welcome to the Qwen2 Image Generator documentation! This directory contains comp
 - [README.md](../README.md) - Main project overview and quick start guide
 - [OFFICIAL_MODEL_INFO.md](OFFICIAL_MODEL_INFO.md) - Official Qwen-Image model capabilities and examples
 - [folder_structure.md](folder_structure.md) - Complete project organization and file structure
+- [ENHANCED_FEATURES.md](ENHANCED_FEATURES.md) - Comprehensive guide to enhanced UI features
+
+### 🚀 **Launch & Usage Guides**
+- [LAUNCH_GUIDE.md](LAUNCH_GUIDE.md) - Complete launcher guide with all startup methods
+- [LAUNCH_SYSTEM_SUMMARY.md](LAUNCH_SYSTEM_SUMMARY.md) - Summary of launch system enhancements
 
 ### 🔧 **Setup & Configuration**
 - [CODE_QUALITY_SYSTEM.md](CODE_QUALITY_SYSTEM.md) - Code quality tools and standards
 - [MVP_CHECKLIST.md](MVP_CHECKLIST.md) - Minimum viable product requirements
+- [QWEN_EDIT_SETUP.md](QWEN_EDIT_SETUP.md) - Qwen-Image-Edit model setup and troubleshooting
+- [QWEN_MODEL_FIX.md](QWEN_MODEL_FIX.md) - Fixed model integration documentation
+- [CLEANUP_SUMMARY.md](CLEANUP_SUMMARY.md) - Codebase organization summary
 
 ### 🛠️ **Troubleshooting Guides**
 - [DEVICE_ERROR_FIX.md](DEVICE_ERROR_FIX.md) - CUDA device and memory management fixes

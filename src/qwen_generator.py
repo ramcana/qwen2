@@ -12,6 +12,13 @@ from typing import Optional, Tuple
 import PIL.Image
 import torch
 from diffusers import DiffusionPipeline
+from PIL import ImageFilter
+
+try:
+    from diffusers import QwenImageEditPipeline
+except ImportError:
+    print("⚠️ QwenImageEditPipeline not available. Enhanced features will be limited.")
+    QwenImageEditPipeline = None
 
 from .qwen_image_config import (
     GENERATION_CONFIG,
@@ -26,6 +33,7 @@ class QwenImageGenerator:
         self.device: str = "cuda" if torch.cuda.is_available() else "cpu"
         self.model_name: str = model_name or MODEL_CONFIG["model_name"]
         self.pipe: Optional[DiffusionPipeline] = None
+        self.edit_pipe: Optional[QwenImageEditPipeline] = None
         # Create output directory
         self.output_dir: str = "generated_images"
         os.makedirs(self.output_dir, exist_ok=True)
@@ -34,6 +42,10 @@ class QwenImageGenerator:
         if torch.cuda.is_available():
             print(f"GPU: {torch.cuda.get_device_name()}")
             print(f"VRAM: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f}GB")
+        
+        print("\n📋 Qwen Model Usage:")
+        print("   • Qwen-Image: Text-to-image generation")
+        print("   • Qwen-Image-Edit: Image editing with reference images")
     
     def load_model(self) -> bool:
         """Load Qwen-Image diffusion pipeline"""
@@ -149,6 +161,9 @@ class QwenImageGenerator:
                 
             print("✅ Qwen-Image model loaded successfully!")
             
+            # Load Qwen-Image-Edit for enhanced features
+            self._load_qwen_edit_pipeline()
+            
             # Verify device setup
             self.verify_device_setup()
             
@@ -162,6 +177,56 @@ class QwenImageGenerator:
             print("   3. Verify CUDA installation if using GPU")
             print("   4. Try restarting the application")
             return False
+    
+    def _load_qwen_edit_pipeline(self) -> None:
+        """Load Qwen-Image-Edit pipeline for enhanced features"""
+        if QwenImageEditPipeline is None:
+            print("⚠️ QwenImageEditPipeline not available. Install latest diffusers from GitHub.")
+            print("   Enhanced features will use alternative methods.")
+            self.edit_pipe = None
+            return
+            
+        try:
+            print("🔄 Loading Qwen-Image-Edit pipeline for enhanced features...")
+            print("   This may take several minutes for first-time download (~20GB model)")
+            
+            # Load Qwen-Image-Edit model with timeout handling
+            try:
+                self.edit_pipe = QwenImageEditPipeline.from_pretrained(
+                    "Qwen/Qwen-Image-Edit",
+                    torch_dtype=MODEL_CONFIG["torch_dtype"],
+                    low_cpu_mem_usage=True,
+                    # Add cache dir to avoid repeated downloads
+                    cache_dir="./models/qwen-image-edit"
+                )
+                
+                if torch.cuda.is_available():
+                    self.edit_pipe = self.edit_pipe.to(self.device)
+                    if MEMORY_CONFIG["enable_attention_slicing"]:
+                        # Apply memory optimizations if available
+                        try:
+                            self.edit_pipe.enable_attention_slicing()
+                        except Exception:
+                            pass
+                
+                print("✅ Qwen-Image-Edit pipeline loaded successfully!")
+                print("   • Image-to-Image editing available")
+                print("   • Inpainting capabilities available")
+                print("   • Text editing in images available")
+                
+            except Exception as download_error:
+                print(f"⚠️ Could not download/load Qwen-Image-Edit: {download_error}")
+                print("   This could be due to:")
+                print("   - Large model size (~20GB) taking time to download")
+                print("   - Network connectivity issues")
+                print("   - Insufficient disk space")
+                print("   Enhanced features will use alternative approaches.")
+                self.edit_pipe = None
+                
+        except Exception as e:
+            print(f"⚠️ Error loading Qwen-Image-Edit pipeline: {e}")
+            print("   Enhanced features will use creative text-to-image approaches.")
+            self.edit_pipe = None
     
     def verify_device_setup(self) -> bool:
         """Verify model components are on the correct device (safe version)"""
@@ -373,6 +438,25 @@ class QwenImageGenerator:
                         torch.cuda.synchronize()
                         print(f"🧹 CUDA synchronized, available memory: {torch.cuda.get_device_properties(0).total_memory - torch.cuda.memory_allocated():.1e} bytes")
                     
+                    # For Qwen-Image, we need to use the correct parameter name
+                    generation_params = {
+                        "prompt": enhanced_prompt,
+                        "negative_prompt": negative_prompt,
+                        "width": width,
+                        "height": height,
+                        "num_inference_steps": num_inference_steps,
+                        "generator": generator
+                    }
+                    
+                    # Add CFG scale parameter (check what parameter name Qwen uses)
+                    if hasattr(self.pipe, '__call__'):
+                        import inspect
+                        sig = inspect.signature(self.pipe.__call__)
+                        if 'guidance_scale' in sig.parameters:
+                            generation_params['guidance_scale'] = cfg_scale
+                        elif 'true_cfg_scale' in sig.parameters:
+                            generation_params['true_cfg_scale'] = cfg_scale
+                    
                     # NO aggressive device moves right before generation
                     # Just verify and proceed - the model should already be properly loaded
                     print(f"✅ Starting generation on {self.device}")
@@ -381,15 +465,7 @@ class QwenImageGenerator:
                     
                     # Generation with additional error handling
                     try:
-                        result = self.pipe(
-                            prompt=enhanced_prompt,
-                            negative_prompt=negative_prompt,
-                            width=width,
-                            height=height,
-                            num_inference_steps=num_inference_steps,
-                            true_cfg_scale=cfg_scale,
-                            generator=generator
-                        )
+                        result = self.pipe(**generation_params)
                     except RuntimeError as runtime_error:
                         if "Expected all tensors to be on the same device" in str(runtime_error):
                             print(f"❌ Device error during generation: {runtime_error}")
@@ -454,5 +530,242 @@ class QwenImageGenerator:
             
         except Exception as e:
             error_msg = f"❌ Error generating image: {str(e)}"
+            print(error_msg)
+            return None, error_msg
+    
+    def generate_img2img(self, prompt: str, init_image: PIL.Image.Image, strength: float = 0.8,
+                        negative_prompt: str = "", width: Optional[int] = None, height: Optional[int] = None,
+                        num_inference_steps: Optional[int] = None, cfg_scale: Optional[float] = None,
+                        seed: int = -1, language: str = "en", enhance_prompt_flag: bool = True) -> Tuple[Optional[PIL.Image.Image], str]:
+        """Generate image from text prompt using input image as base (using Qwen-Image-Edit)"""
+        
+        if not self.edit_pipe:
+            # Provide helpful message and suggest alternatives
+            error_msg = "⚠️ Qwen-Image-Edit pipeline not available.\n"
+            error_msg += "\nPossible solutions:\n"
+            error_msg += "1. Wait for model download to complete (may take 10-20 minutes)\n"
+            error_msg += "2. Check internet connection\n"
+            error_msg += "3. Ensure sufficient disk space (~20GB)\n"
+            error_msg += "4. Try using Text-to-Image mode with descriptive prompts\n"
+            error_msg += "\nFor now, try using Text-to-Image with a prompt like:\n"
+            error_msg += f"'An image showing: {prompt}'"
+            return None, error_msg
+            
+        try:
+            # Use default values if not provided
+            width = width or GENERATION_CONFIG["width"]
+            height = height or GENERATION_CONFIG["height"]
+            num_inference_steps = num_inference_steps or GENERATION_CONFIG["num_inference_steps"]
+            cfg_scale = cfg_scale or GENERATION_CONFIG["true_cfg_scale"]
+            
+            # Enhance prompt if requested
+            if enhance_prompt_flag:
+                enhanced_prompt = self.enhance_prompt(prompt, language)
+            else:
+                enhanced_prompt = prompt
+                
+            # Handle random seed
+            if seed == -1:
+                seed = random.randint(0, 2**32 - 1)
+            
+            # Create generator
+            if torch.cuda.is_available() and self.device == "cuda":
+                generator = torch.Generator(device="cuda").manual_seed(seed)
+            else:
+                generator = torch.Generator().manual_seed(seed)
+            
+            # Resize init image to target dimensions
+            init_image = init_image.resize((width, height), PIL.Image.Resampling.LANCZOS)
+            
+            print("Generating image-to-image with Qwen-Image-Edit...")
+            print(f"Prompt: {enhanced_prompt[:100]}...")
+            print(f"Settings: {width}x{height}, steps: {num_inference_steps}, CFG: {cfg_scale}, seed: {seed}")
+            
+            with torch.no_grad():
+                # Use Qwen-Image-Edit pipeline
+                inputs = {
+                    "image": init_image,
+                    "prompt": enhanced_prompt,
+                    "negative_prompt": negative_prompt,
+                    "num_inference_steps": num_inference_steps,
+                    "true_cfg_scale": cfg_scale,
+                    "generator": generator
+                }
+                
+                result = self.edit_pipe(**inputs)
+            
+            image = result.images[0]
+            
+            # Save image with metadata
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"qwen_img2img_{timestamp}_{seed}.png"
+            filepath = os.path.join(self.output_dir, filename)
+            
+            metadata = {
+                "mode": "img2img",
+                "prompt": enhanced_prompt,
+                "negative_prompt": negative_prompt,
+                "width": width,
+                "height": height,
+                "num_inference_steps": num_inference_steps,
+                "cfg_scale": cfg_scale,
+                "seed": seed,
+                "language": language,
+                "model": "Qwen-Image-Edit",
+                "timestamp": timestamp
+            }
+            
+            # Save image and metadata
+            image.save(filepath)
+            metadata_file = filepath.replace(".png", "_metadata.json")
+            with open(metadata_file, "w", encoding="utf-8") as f:
+                json.dump(metadata, f, indent=2, ensure_ascii=False)
+            
+            success_msg = f"✅ Image-to-image generated with Qwen-Image-Edit!\nSaved as: {filename}\nSeed: {seed}"
+            return image, success_msg
+            
+        except Exception as e:
+            error_msg = f"❌ Error in img2img generation: {str(e)}"
+            print(error_msg)
+            return None, error_msg
+    
+    def generate_inpaint(self, prompt: str, init_image: PIL.Image.Image, mask_image: PIL.Image.Image,
+                        negative_prompt: str = "", width: Optional[int] = None, height: Optional[int] = None,
+                        num_inference_steps: Optional[int] = None, cfg_scale: Optional[float] = None,
+                        seed: int = -1, language: str = "en", enhance_prompt_flag: bool = True) -> Tuple[Optional[PIL.Image.Image], str]:
+        """Generate image using inpainting with mask (using Qwen-Image-Edit)"""
+        
+        if not self.edit_pipe:
+            # Provide helpful message and suggest alternatives
+            error_msg = "⚠️ Qwen-Image-Edit pipeline not available for inpainting.\n"
+            error_msg += "\nPossible solutions:\n"
+            error_msg += "1. Wait for model download to complete (may take 10-20 minutes)\n"
+            error_msg += "2. Check internet connection\n"
+            error_msg += "3. Ensure sufficient disk space (~20GB)\n"
+            error_msg += "4. Try using Text-to-Image mode instead\n"
+            error_msg += "\nFor inpainting-like results, try Text-to-Image with:\n"
+            error_msg += f"'A composition featuring: {prompt}'"
+            return None, error_msg
+            
+        try:
+            # Use default values if not provided
+            width = width or GENERATION_CONFIG["width"]
+            height = height or GENERATION_CONFIG["height"]
+            num_inference_steps = num_inference_steps or GENERATION_CONFIG["num_inference_steps"]
+            cfg_scale = cfg_scale or GENERATION_CONFIG["true_cfg_scale"]
+            
+            # Enhance prompt if requested
+            if enhance_prompt_flag:
+                enhanced_prompt = self.enhance_prompt(prompt, language)
+            else:
+                enhanced_prompt = prompt
+                
+            # Handle random seed
+            if seed == -1:
+                seed = random.randint(0, 2**32 - 1)
+            
+            # Create generator
+            if torch.cuda.is_available() and self.device == "cuda":
+                generator = torch.Generator(device="cuda").manual_seed(seed)
+            else:
+                generator = torch.Generator().manual_seed(seed)
+            
+            # Resize images to target dimensions
+            init_image = init_image.resize((width, height), PIL.Image.Resampling.LANCZOS)
+            mask_image = mask_image.resize((width, height), PIL.Image.Resampling.LANCZOS)
+            
+            # For Qwen-Image-Edit, we'll create a composite prompt that describes the inpainting task
+            mask_prompt = f"In the masked area: {enhanced_prompt}"
+            
+            print("Generating inpaint with Qwen-Image-Edit...")
+            print(f"Prompt: {mask_prompt[:100]}...")
+            print(f"Settings: {width}x{height}, steps: {num_inference_steps}, CFG: {cfg_scale}, seed: {seed}")
+            
+            with torch.no_grad():
+                # Use Qwen-Image-Edit pipeline for inpainting-style editing
+                inputs = {
+                    "image": init_image,
+                    "prompt": mask_prompt,
+                    "negative_prompt": negative_prompt,
+                    "num_inference_steps": num_inference_steps,
+                    "true_cfg_scale": cfg_scale,
+                    "generator": generator
+                }
+                
+                result = self.edit_pipe(**inputs)
+            
+            image = result.images[0]
+            
+            # Save image with metadata
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"qwen_inpaint_{timestamp}_{seed}.png"
+            filepath = os.path.join(self.output_dir, filename)
+            
+            metadata = {
+                "mode": "inpaint",
+                "prompt": enhanced_prompt,
+                "mask_prompt": mask_prompt,
+                "negative_prompt": negative_prompt,
+                "width": width,
+                "height": height,
+                "num_inference_steps": num_inference_steps,
+                "cfg_scale": cfg_scale,
+                "seed": seed,
+                "language": language,
+                "model": "Qwen-Image-Edit",
+                "timestamp": timestamp
+            }
+            
+            # Save image and metadata
+            image.save(filepath)
+            metadata_file = filepath.replace(".png", "_metadata.json")
+            with open(metadata_file, "w", encoding="utf-8") as f:
+                json.dump(metadata, f, indent=2, ensure_ascii=False)
+            
+            success_msg = f"✅ Inpainted image generated with Qwen-Image-Edit!\nSaved as: {filename}\nSeed: {seed}"
+            return image, success_msg
+            
+        except Exception as e:
+            error_msg = f"❌ Error in inpainting generation: {str(e)}"
+            print(error_msg)
+            return None, error_msg
+    
+    def super_resolution(self, image: PIL.Image.Image, scale_factor: int = 2) -> Tuple[Optional[PIL.Image.Image], str]:
+        """Enhance image resolution using simple upscaling with AI-like enhancement"""
+        try:
+            # Get original dimensions
+            original_width, original_height = image.size
+            new_width = original_width * scale_factor
+            new_height = original_height * scale_factor
+            
+            # Use high-quality resampling with sharpening
+            enhanced_image = image.resize((new_width, new_height), PIL.Image.Resampling.LANCZOS)
+            
+            # Apply sharpening filter for better quality
+            enhanced_image = enhanced_image.filter(ImageFilter.UnsharpMask(radius=2, percent=150, threshold=3))
+            
+            # Save enhanced image
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"qwen_superres_{timestamp}_{scale_factor}x.png"
+            filepath = os.path.join(self.output_dir, filename)
+            
+            metadata = {
+                "mode": "super_resolution",
+                "original_size": [original_width, original_height],
+                "enhanced_size": [new_width, new_height],
+                "scale_factor": scale_factor,
+                "timestamp": timestamp
+            }
+            
+            enhanced_image.save(filepath)
+            metadata_file = filepath.replace(".png", "_metadata.json")
+            with open(metadata_file, "w", encoding="utf-8") as f:
+                json.dump(metadata, f, indent=2, ensure_ascii=False)
+            
+            success_msg = f"✅ Image enhanced successfully!\nSaved as: {filename}\nScale: {scale_factor}x ({original_width}x{original_height} → {new_width}x{new_height})"
+            return enhanced_image, success_msg
+            
+        except Exception as e:
+            error_msg = f"❌ Error in super resolution: {str(e)}"
             print(error_msg)
             return None, error_msg

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Qwen-Image Local UI - Text-to-Image Generation
+Qwen-Image Enhanced UI - Advanced Image Generation Suite
 Optimized for RTX 4080 + AMD Threadripper Setup
-A complete Gradio interface for generating images with Qwen-Image
+Features: Text-to-Image, Image-to-Image, Inpainting, Super-Resolution
 """
 
 import os
@@ -27,14 +27,19 @@ def initialize_model():
     else:
         return "❌ Failed to load model. Check console for errors."
 
-def generate_image_ui(prompt, negative_prompt, width, height, steps, cfg_scale, 
-                     seed, language, enhance_prompt):
-    """UI wrapper for image generation"""
+def generate_img2img_ui(prompt, negative_prompt, init_image, strength, width, height, 
+                       steps, cfg_scale, seed, language, enhance_prompt):
+    """UI wrapper for image-to-image generation"""
     if not prompt.strip():
-        return None, "Please enter a prompt to generate an image."
+        return None, "Please enter a prompt for image-to-image generation."
     
-    image, message = qwen_generator.generate_image(
+    if init_image is None:
+        return None, "Please upload an input image for image-to-image generation."
+    
+    image, message = qwen_generator.generate_img2img(
         prompt=prompt,
+        init_image=init_image,
+        strength=strength,
         negative_prompt=negative_prompt,
         width=width,
         height=height,
@@ -43,6 +48,46 @@ def generate_image_ui(prompt, negative_prompt, width, height, steps, cfg_scale,
         seed=seed,
         language=language,
         enhance_prompt_flag=enhance_prompt
+    )
+    
+    return image, message
+
+def generate_inpaint_ui(prompt, negative_prompt, init_image, mask_image, width, height,
+                       steps, cfg_scale, seed, language, enhance_prompt):
+    """UI wrapper for inpainting generation"""
+    if not prompt.strip():
+        return None, "Please enter a prompt for inpainting."
+    
+    if init_image is None:
+        return None, "Please upload an input image for inpainting."
+        
+    if mask_image is None:
+        return None, "Please provide a mask for inpainting."
+    
+    image, message = qwen_generator.generate_inpaint(
+        prompt=prompt,
+        init_image=init_image,
+        mask_image=mask_image,
+        negative_prompt=negative_prompt,
+        width=width,
+        height=height,
+        num_inference_steps=steps,
+        cfg_scale=cfg_scale,
+        seed=seed,
+        language=language,
+        enhance_prompt_flag=enhance_prompt
+    )
+    
+    return image, message
+
+def super_resolution_ui(input_image, scale_factor):
+    """UI wrapper for super resolution"""
+    if input_image is None:
+        return None, "Please upload an image to enhance."
+    
+    image, message = qwen_generator.super_resolution(
+        image=input_image,
+        scale_factor=scale_factor
     )
     
     return image, message

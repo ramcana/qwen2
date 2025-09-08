@@ -30,6 +30,9 @@ source scripts/activate.sh
 # Test system health
 python tools/test_device.py
 
+# Download Qwen-Image-Edit model
+python tools/download_qwen_edit.py
+
 # Emergency fixes
 python tools/emergency_device_fix.py
 
