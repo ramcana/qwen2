@@ -5,9 +5,10 @@ Pre-downloads the Qwen-Image-Edit model for enhanced features
 """
 
 import os
-import sys
+
 import torch
 from diffusers import QwenImageEditPipeline
+
 
 def download_qwen_edit_model():
     """Download and cache the Qwen-Image-Edit model"""
@@ -28,9 +29,9 @@ def download_qwen_edit_model():
     models_dir = "./models/qwen-image-edit"
     os.makedirs(models_dir, exist_ok=True)
     
-    print(f"\n📥 Downloading Qwen-Image-Edit model...")
+    print("\n📥 Downloading Qwen-Image-Edit model...")
     print(f"📁 Cache directory: {models_dir}")
-    print(f"📊 Expected size: ~20GB")
+    print("📊 Expected size: ~20GB")
     print("⏳ This may take 10-30 minutes depending on your internet speed...")
     
     try:
@@ -91,10 +92,11 @@ def check_model_status():
 def main():
     print("Select an option:")
     print("1. Check model status")
-    print("2. Download model")
-    print("3. Exit")
+    print("2. Download model (standard method)")
+    print("3. Download model (enhanced HF Hub API) - RECOMMENDED")
+    print("4. Exit")
     
-    choice = input("\nEnter your choice (1/2/3): ").strip()
+    choice = input("\nEnter your choice (1/2/3/4): ").strip()
     
     if choice == "1":
         check_model_status()
@@ -104,6 +106,16 @@ def main():
         else:
             print("Model is already available!")
     elif choice == "3":
+        print("🚀 Launching enhanced downloader...")
+        print("💡 This method provides better progress tracking and resume capability")
+        try:
+            import subprocess
+            import sys
+            subprocess.run([sys.executable, "tools/download_qwen_edit_hub.py"])
+        except Exception as e:
+            print(f"❌ Could not launch enhanced downloader: {e}")
+            print("💡 Try: python tools/download_qwen_edit_hub.py")
+    elif choice == "4":
         print("👋 Goodbye!")
     else:
         print("❌ Invalid choice")

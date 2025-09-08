@@ -179,7 +179,7 @@ class QwenImageGenerator:
             return False
     
     def _load_qwen_edit_pipeline(self) -> None:
-        """Load Qwen-Image-Edit pipeline for enhanced features"""
+        """Load Qwen-Image-Edit pipeline for enhanced features using HF Hub API"""
         if QwenImageEditPipeline is None:
             print("⚠️ QwenImageEditPipeline not available. Install latest diffusers from GitHub.")
             print("   Enhanced features will use alternative methods.")
@@ -188,26 +188,51 @@ class QwenImageGenerator:
             
         try:
             print("🔄 Loading Qwen-Image-Edit pipeline for enhanced features...")
-            print("   This may take several minutes for first-time download (~20GB model)")
+            print("   Using HuggingFace Hub API for better download reliability")
             
-            # Load Qwen-Image-Edit model with timeout handling
+            # Import HuggingFace Hub for better download handling
             try:
+                from huggingface_hub import repo_info, snapshot_download
+                use_hub_api = True
+            except ImportError:
+                print("⚠️ huggingface_hub not available, using standard method")
+                use_hub_api = False
+            
+            # Load Qwen-Image-Edit model with improved download handling
+            try:
+                if use_hub_api:
+                    # Pre-check if model exists and get size info
+                    try:
+                        repo_data = repo_info("Qwen/Qwen-Image-Edit")
+                        total_size = sum(file.size for file in repo_data.siblings if file.size)
+                        print(f"📊 Model size: {self._format_size(total_size)} (~20GB)")
+                        print("💡 Download will resume automatically if interrupted")
+                    except Exception:
+                        print("📊 Model size: ~20GB (estimated)")
+                
+                # Load with optimized settings for your hardware (128GB RAM)
                 self.edit_pipe = QwenImageEditPipeline.from_pretrained(
                     "Qwen/Qwen-Image-Edit",
                     torch_dtype=MODEL_CONFIG["torch_dtype"],
-                    low_cpu_mem_usage=True,
-                    # Add cache dir to avoid repeated downloads
-                    cache_dir="./models/qwen-image-edit"
+                    low_cpu_mem_usage=False,  # Disabled for 128GB RAM system
+                    resume_download=True,     # Auto-resume interrupted downloads
+                    use_safetensors=True      # Faster loading
                 )
                 
                 if torch.cuda.is_available():
+                    # Move to device and apply optimizations
                     self.edit_pipe = self.edit_pipe.to(self.device)
+                    
                     if MEMORY_CONFIG["enable_attention_slicing"]:
                         # Apply memory optimizations if available
                         try:
                             self.edit_pipe.enable_attention_slicing()
-                        except Exception:
-                            pass
+                            print("✅ Attention slicing enabled for Qwen-Image-Edit")
+                        except Exception as opt_error:
+                            print(f"⚠️ Could not enable attention slicing: {opt_error}")
+                    
+                    # Verify device consistency for edit pipeline
+                    self._verify_edit_pipeline_devices()
                 
                 print("✅ Qwen-Image-Edit pipeline loaded successfully!")
                 print("   • Image-to-Image editing available")
@@ -215,11 +240,25 @@ class QwenImageGenerator:
                 print("   • Text editing in images available")
                 
             except Exception as download_error:
+                error_msg = str(download_error)
                 print(f"⚠️ Could not download/load Qwen-Image-Edit: {download_error}")
-                print("   This could be due to:")
-                print("   - Large model size (~20GB) taking time to download")
-                print("   - Network connectivity issues")
-                print("   - Insufficient disk space")
+                
+                # Provide specific guidance based on error type
+                if "Connection" in error_msg or "timeout" in error_msg.lower():
+                    print("🌐 Network issue detected. Try:")
+                    print("   1. Check internet connection stability")
+                    print("   2. Use the enhanced downloader: python tools/download_qwen_edit_hub.py")
+                    print("   3. Download will auto-resume if interrupted")
+                elif "disk" in error_msg.lower() or "space" in error_msg.lower():
+                    print("💾 Disk space issue. Ensure ~25GB free space available")
+                elif "permission" in error_msg.lower():
+                    print("🔒 Permission issue. Check write access to cache directory")
+                else:
+                    print("💡 General troubleshooting:")
+                    print("   1. Try: python tools/download_qwen_edit_hub.py")
+                    print("   2. Check HuggingFace Hub accessibility")
+                    print("   3. Ensure sufficient disk space (~25GB)")
+                
                 print("   Enhanced features will use alternative approaches.")
                 self.edit_pipe = None
                 
@@ -227,6 +266,74 @@ class QwenImageGenerator:
             print(f"⚠️ Error loading Qwen-Image-Edit pipeline: {e}")
             print("   Enhanced features will use creative text-to-image approaches.")
             self.edit_pipe = None
+    
+    @staticmethod
+    def _format_size(size_bytes: int) -> str:
+        """Format byte size in human readable format"""
+        for unit in ['B', 'KB', 'MB', 'GB']:
+            if size_bytes < 1024.0:
+                return f"{size_bytes:.1f} {unit}"
+            size_bytes /= 1024.0
+        return f"{size_bytes:.1f} TB"
+    
+    def _verify_edit_pipeline_devices(self) -> bool:
+        """Verify edit pipeline components are on correct device"""
+        if not self.edit_pipe:
+            return False
+            
+        print(f"🔍 Verifying Qwen-Image-Edit pipeline devices for {self.device}:")
+        
+        try:
+            # Check components safely
+            components = ['unet', 'vae', 'text_encoder']
+            all_correct = True
+            
+            for comp_name in components:
+                if hasattr(self.edit_pipe, comp_name) and getattr(self.edit_pipe, comp_name) is not None:
+                    component = getattr(self.edit_pipe, comp_name)
+                    
+                    try:
+                        # Safe device check
+                        if hasattr(component, 'device'):
+                            comp_device = str(component.device)
+                        else:
+                            # Check first parameter device safely
+                            try:
+                                comp_device = str(next(component.parameters()).device)
+                            except (StopIteration, AttributeError):
+                                comp_device = "unknown"
+                        
+                        print(f"   {comp_name.upper()}: {comp_device}")
+                        
+                        if comp_device != self.device and comp_device != "unknown":
+                            print(f"   🔧 Moving {comp_name} from {comp_device} to {self.device}")
+                            try:
+                                component = component.to(self.device)
+                                setattr(self.edit_pipe, comp_name, component)
+                                print(f"   ✅ {comp_name} moved successfully")
+                            except Exception as move_error:
+                                print(f"   ⚠️ Could not move {comp_name}: {move_error}")
+                                all_correct = False
+                                
+                    except Exception as comp_error:
+                        print(f"   {comp_name.upper()}: error checking device ({comp_error})")
+                        all_correct = False
+            
+            # Check scheduler
+            if hasattr(self.edit_pipe, 'scheduler') and self.edit_pipe.scheduler is not None:
+                print(f"   SCHEDULER: present ({type(self.edit_pipe.scheduler).__name__})")
+            
+            # Summary
+            if all_correct:
+                print(f"✅ Qwen-Image-Edit pipeline verified on {self.device}")
+                return True
+            else:
+                print("⚠️ Some edit pipeline components needed adjustment")
+                return False
+                
+        except Exception as e:
+            print(f"❌ Edit pipeline device verification failed: {e}")
+            return False
     
     def verify_device_setup(self) -> bool:
         """Verify model components are on the correct device (safe version)"""
