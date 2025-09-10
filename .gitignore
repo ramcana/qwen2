@@ -128,3 +128,6 @@ coverage.xml
 # Local development
 .local/
 local_settings.py
+# Qwen model directories (large files)
+models--*/
+test_model/
