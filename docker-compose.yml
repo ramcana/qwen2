@@ -1,0 +1,18 @@
+version: '3.9'
+services:
+  qwen2:
+    build:
+      context: .
+      dockerfile: Dockerfile.cuda
+    volumes:
+      - ~/.cache/qwen2:/root/.cache/qwen2
+    ports:
+      - "7860:7860"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    command: ["python", "launch.py", "--mode", "enhanced"]

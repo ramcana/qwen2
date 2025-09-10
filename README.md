@@ -27,6 +27,34 @@ A professional text-to-image generation system using the Qwen-Image model, optim
 - **Python**: 3.8+ (3.10+ recommended)
 - **CUDA**: 12.1 or compatible
 - **PyTorch**: 2.1.0+
+### Deterministic Installation
+
+Install using pinned requirements and constraints:
+```bash
+pip install -r requirements.txt -c constraints.txt
+```
+
+#### CUDA-specific torch wheels
+
+| CUDA | Command |
+| ---- | ------- |
+| 12.1 | `pip install torch==2.3.1+cu121 torchvision==0.18.1+cu121 -f https://download.pytorch.org/whl/torch_stable.html` |
+| 11.8 | `pip install torch==2.3.1+cu118 torchvision==0.18.1+cu118 -f https://download.pytorch.org/whl/torch_stable.html` |
+
+
+## Docker and Conda
+
+Build a CUDA-ready container:
+```bash
+docker compose build
+docker compose run --gpus all -p 7860:7860 qwen2
+```
+
+Create a conda environment:
+```bash
+conda env create -f environment.yml
+conda activate qwen2-image
+```
 
 ## Quick Start
 

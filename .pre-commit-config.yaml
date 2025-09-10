@@ -41,7 +41,10 @@ repos:
     rev: 1.7.5
     hooks:
       - id: bandit
-        args: [-r, --format=custom, --msg-template='{abspath}:{line}: {test_id}[bandit]: {severity}: {msg}']
+        args:
+          - -r
+          - --format=custom
+          - '--msg-template={abspath}:{line}: {test_id}[bandit]: {severity}: {msg}'
         exclude: ^(tests/|generated_images/|models/|venv/)
 
   # General pre-commit hooks
@@ -79,7 +82,7 @@ repos:
     rev: v2.2.5
     hooks:
       - id: codespell
-        args: [--skip="*.log,*.json,venv,generated_images,models"]
+        args: ['--skip=*.log,*.json,venv,generated_images,models']
 
   # YAML formatting
   - repo: https://github.com/pre-commit/mirrors-prettier
@@ -101,30 +104,3 @@ default_stages: [commit]
 fail_fast: false
 exclude: ^(generated_images/|models/|venv/|\.git/)
 
-# Custom local hooks
-repos:
-  - repo: local
-    hooks:
-      # Custom hardware check
-      - id: cuda-check
-        name: CUDA availability check
-        entry: python -c "import torch; print('CUDA available:', torch.cuda.is_available())"
-        language: system
-        pass_filenames: false
-        stages: [manual]
-
-      # Import check
-      - id: import-check
-        name: Check core imports
-        entry: python -c "import sys; sys.path.append('src'); from qwen_image_config import MODEL_CONFIG; from qwen_generator import QwenImageGenerator; print('✅ Core imports OK')"
-        language: system
-        pass_filenames: false
-        files: ^src/.*\.py$
-
-      # File size check for models
-      - id: model-size-check
-        name: Check for large model files
-        entry: bash -c 'find . -name "*.bin" -o -name "*.safetensors" -o -name "*.pt" -o -name "*.pth" | xargs -I {} sh -c "echo {}; ls -lh {}" | grep -E "\s+[0-9]+[.,][0-9]*[GM]\s+" || true'
-        language: system
-        pass_filenames: false
-        stages: [manual]
