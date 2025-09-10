@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.1.1-cudnn-runtime-ubuntu22.04
+FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
 
 ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
@@ -9,7 +9,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 COPY requirements.txt constraints.txt requirements.lock ./
-RUN pip install -U uv && uv pip install -r requirements.txt -c constraints.txt
+RUN pip install -U uv && uv pip install --no-cache-dir -r requirements.txt -c constraints.txt --system
+RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 --no-deps
 
 COPY . .
 CMD ["python", "launch.py", "--mode", "enhanced"]

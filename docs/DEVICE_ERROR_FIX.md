@@ -36,7 +36,7 @@ generator = torch.Generator(device=self.device).manual_seed(seed)
 # Explicit component device transfer
 if torch.cuda.is_available():
     self.pipe = self.pipe.to(self.device)
-    
+
     # Ensure ALL components are on the same device
     if hasattr(self.pipe, 'unet'):
         self.pipe.unet = self.pipe.unet.to(self.device)
@@ -57,7 +57,7 @@ else:
 Added `verify_device_setup()` method that checks:
 
 - ✅ Pipeline device
-- ✅ UNet device  
+- ✅ UNet device
 - ✅ VAE device
 - ✅ Text encoder device
 - ✅ All components consistency
@@ -71,7 +71,7 @@ with torch.cuda.device(self.device) if torch.cuda.is_available() else torch.no_g
         # Clear CUDA cache before generation
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-        
+
         result = self.pipe(...)
 ```
 
@@ -127,7 +127,7 @@ After restarting, when you click "🚀 Initialize Qwen-Image Model", you should 
 Loading Qwen-Image model... This may take a few minutes.
 🔄 Moving model to GPU: cuda
 ✅ UNet moved to cuda
-✅ VAE moved to cuda  
+✅ VAE moved to cuda
 ✅ Text encoder moved to cuda
 ✅ Attention slicing enabled
 ✅ Qwen-Image model loaded successfully!
@@ -152,7 +152,7 @@ Device: cuda, Generator device: cuda:0
 ## Performance Impact
 
 - **✅ Improved**: Consistent GPU usage
-- **✅ Faster**: No CPU/GPU transfer overhead  
+- **✅ Faster**: No CPU/GPU transfer overhead
 - **✅ Stable**: No device mismatch errors
 - **✅ Memory**: Better CUDA memory management
 

@@ -14,11 +14,11 @@ accelerate==0.34.2
 safetensors==0.4.4
 
 # Memory optimization
-xformers==0.0.27.post2
+xformers==0.0.27
 
 # Image processing
 Pillow==9.0.0
-opencv-python==4.8.0
+opencv-python==4.8.1.78
 
 # Web interfaces
 gradio==4.44.0
@@ -31,7 +31,7 @@ numpy==1.24.0
 scipy==1.10.0
 tqdm==4.65.0
 requests==2.28.0
-huggingface_hub==0.19.0
+huggingface_hub
 
 # Configuration and logging
 PyYAML==6.0
@@ -39,13 +39,13 @@ python-dotenv==1.0.0
 
 # Development tools
 pytest==7.0.0
-black==23.0.0
+black==22.12.0
 flake8==6.0.0
 isort==5.12.0
 mypy==1.5.0
 bandit==1.7.5
 pre-commit==3.3.0
-ruff==0.0.280
+ruff==0.2.2
 autopep8==2.0.0
 pylint==2.17.0
 codespell==2.2.5

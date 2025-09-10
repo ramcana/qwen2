@@ -85,7 +85,7 @@ const GenerationPanel: React.FC = () => {
       {/* Generation Form */}
       <div className="card p-6">
         <h2 className="text-xl font-bold text-gray-900 mb-4">Generate Image</h2>
-        
+
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           {/* Prompt */}
           <div>

@@ -23,7 +23,7 @@ cd /home/ramji_t/projects/Qwen2
 ### Expected Success Messages
 
 - ✅ UNet moved to cuda
-- ✅ VAE moved to cuda  
+- ✅ VAE moved to cuda
 - ✅ Text encoder moved to cuda
 - ✅ Device verification completed
 
@@ -37,7 +37,7 @@ cd /home/ramji_t/projects/Qwen2
 ### Hardware Tested
 
 - RTX 4080 (16GB VRAM) ✅
-- AMD Threadripper (128GB RAM) ✅  
+- AMD Threadripper (128GB RAM) ✅
 - WSL2 Ubuntu ✅
 - CUDA 12.8 + PyTorch 2.8.0 ✅
 

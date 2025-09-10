@@ -223,9 +223,7 @@ def load_model_with_retry(
                 logger.warning(f"⚠️ Out of memory error on attempt {attempt}: {e}")
                 if attempt < max_retries:
                     # Try to lower max_pixels and clear cache before retry
-                    logger.info(
-                        "💡 Lowering max_pixels and clearing cache for retry..."
-                    )
+                    logger.info("💡 Lowering max_pixels and clearing cache for retry...")
                     clear_gpu_memory()
                     # Reduce memory usage for next attempt
                     if "max_memory" in load_kwargs:

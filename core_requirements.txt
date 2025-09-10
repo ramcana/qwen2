@@ -1,0 +1,37 @@
+# Core Python dependencies for Qwen-Image Local Generator
+# Optimized for RTX 4080 + CUDA 12.1
+
+# Core PyTorch with CUDA support
+torch==2.3.1
+torchvision==0.18.1
+torchaudio==2.3.1
+
+# Diffusion models and transformers (latest for Qwen-Image-Edit support)
+diffusers==0.30.0
+transformers==4.44.2
+accelerate==0.34.2
+safetensors==0.4.4
+
+# Memory optimization
+xformers==0.0.27
+
+# Image processing
+Pillow==9.0.0
+opencv-python==4.8.1.78
+
+# Web interfaces
+gradio==4.44.0
+fastapi==0.104.0
+uvicorn[standard]==0.24.0
+pydantic==2.4.0
+
+# Utilities
+numpy==1.24.0
+scipy==1.10.0
+tqdm==4.65.0
+requests==2.31.0
+huggingface_hub
+
+# Configuration and logging
+PyYAML==6.0
+python-dotenv==1.0.0

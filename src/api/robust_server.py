@@ -9,8 +9,11 @@ import signal
 import sys
 
 # Add project root to path
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+project_root = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
 sys.path.insert(0, project_root)
+
 
 def signal_handler(sig, frame):
     """Handle graceful shutdown"""
@@ -18,50 +21,51 @@ def signal_handler(sig, frame):
     print("🧹 Cleaning up resources...")
     sys.exit(0)
 
+
 def main():
     """Main server launcher with robust error handling"""
-    
+
     print("🚀 QWEN-IMAGE API SERVER LAUNCHER")
     print("=" * 50)
     print("High-Performance Configuration for RTX 4080")
     print("Expected generation time: 15-60 seconds")
     print("=" * 50)
-    
+
     # Print current working directory and Python path for debugging
     print(f"📂 Current working directory: {os.getcwd()}")
     print(f"🏠 Project root: {project_root}")
-    
+
     # Set up signal handlers for graceful shutdown
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
-    
+
     # Set high-performance environment variables
     env_vars = {
-        'PYTORCH_CUDA_ALLOC_CONF': 'expandable_segments:True,max_split_size_mb:512',
-        'CUDA_LAUNCH_BLOCKING': '0',
-        'OMP_NUM_THREADS': '32',
-        'MKL_NUM_THREADS': '32',
-        'NUMBA_NUM_THREADS': '32',
+        "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True,max_split_size_mb:512",
+        "CUDA_LAUNCH_BLOCKING": "0",
+        "OMP_NUM_THREADS": "32",
+        "MKL_NUM_THREADS": "32",
+        "NUMBA_NUM_THREADS": "32",
     }
-    
+
     for key, value in env_vars.items():
         os.environ[key] = value
         print(f"✅ {key}={value}")
-    
+
     try:
         print("\n🔄 Starting FastAPI server...")
         print("💡 Model will be loaded on first request")
         print("⏰ No timeout applied - server will wait for model loading")
-        
+
         # Change to project root directory first
         os.chdir(project_root)
         print(f"📂 Changed to project directory: {os.getcwd()}")
-        
+
         # Now import the app after changing directory
         import uvicorn
 
         from src.api.main import app
-        
+
         # Run with more robust settings (only valid parameters)
         uvicorn.run(
             "src.api.main:app",
@@ -72,7 +76,7 @@ def main():
             # timeout_keep_alive=300,  # 5 minutes keep-alive
             # timeout_graceful_shutdown=60,  # 1 minute graceful shutdown
         )
-        
+
     except KeyboardInterrupt:
         print("\n🛑 Server interrupted by user")
         return 0
@@ -95,9 +99,10 @@ def main():
         print("   4. Verify internet connection for model downloads")
         # Don't exit with error code to prevent script from exiting
         return 0
-    
+
     print("\n✅ Server shutdown complete")
     return 0
+
 
 if __name__ == "__main__":
     # Run main and handle any uncaught exceptions gracefully

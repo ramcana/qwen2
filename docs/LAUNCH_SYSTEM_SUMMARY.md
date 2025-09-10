@@ -34,7 +34,7 @@ Then choose your interface from the interactive menu!
 # Standard UI only
 python launch.py --mode standard
 
-# Enhanced UI only  
+# Enhanced UI only
 python launch.py --mode enhanced
 
 # Shell menu

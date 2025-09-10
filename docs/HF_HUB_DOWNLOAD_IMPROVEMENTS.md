@@ -43,7 +43,7 @@ snapshot_download(
 # Old method errors
 "❌ Could not download/load Qwen-Image-Edit: Connection timeout"
 
-# New method errors  
+# New method errors
 "🌐 Network issue detected. Try:
    1. Check internet connection stability
    2. Use the enhanced downloader: python tools/download_qwen_edit_hub.py
@@ -92,7 +92,7 @@ python tools/download_qwen_edit_hub.py --cleanup    # Clean partial files
 # Check what's already downloaded
 python tools/download_qwen_edit_hub.py --status-only
 
-# Resume interrupted download  
+# Resume interrupted download
 python tools/download_qwen_edit_hub.py --resume
 
 # Clean up and start fresh
@@ -108,7 +108,7 @@ python tools/download_qwen_edit_hub.py --selective "*.json" "*.txt"
 Given your hardware (RTX 4080 + 128GB RAM):
 
 1. **Faster Downloads**: Multi-threaded downloads utilize full bandwidth
-2. **No Memory Constraints**: `low_cpu_mem_usage=False` for faster processing  
+2. **No Memory Constraints**: `low_cpu_mem_usage=False` for faster processing
 3. **Resume Capability**: Critical for 20GB downloads on potentially unstable connections
 4. **Better Error Recovery**: Network hiccups won't restart the entire download
 5. **Status Monitoring**: Know exactly what's downloaded and what's missing
@@ -116,7 +116,7 @@ Given your hardware (RTX 4080 + 128GB RAM):
 ## Migration Path
 
 1. **Immediate**: Run `python tools/fix_download.py`
-2. **Enhanced**: Use `python tools/download_qwen_edit_hub.py` 
+2. **Enhanced**: Use `python tools/download_qwen_edit_hub.py`
 3. **Future**: The updated generator code will automatically use better settings
 
 The enhanced approach should resolve the "stuck download" issue completely while providing a much better user experience.

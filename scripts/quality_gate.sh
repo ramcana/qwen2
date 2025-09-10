@@ -23,7 +23,7 @@ print_result() {
     local status=$1
     local message=$2
     ((TOTAL_CHECKS++))
-    
+
     if [ "$status" = "PASS" ]; then
         echo -e "${GREEN}✅ PASS${NC} - $message"
         ((PASS_COUNT++))

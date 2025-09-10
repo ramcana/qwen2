@@ -4,15 +4,15 @@
 hardware:
   gpu_enabled: true
   device: "cuda"
-  memory_fraction: 0.9  # Use 90% of available VRAM
-  
+  memory_fraction: 0.9 # Use 90% of available VRAM
+
 # Model settings
 model:
   name: "Qwen/Qwen-Image"
   precision: "bfloat16"
   variant: "fp16"
   use_safetensors: true
-  
+
 # Generation defaults
 generation:
   default_width: 1664
@@ -20,20 +20,20 @@ generation:
   default_steps: 50
   default_cfg_scale: 4.0
   max_batch_size: 1
-  
+
 # UI settings
 ui:
   interface_port: 7860
   share_gradio: false
   auto_launch_browser: true
   theme: "soft"
-  
+
 # Performance
 performance:
   enable_attention_slicing: true
   enable_cpu_offload: false
   enable_xformers: true
-  
+
 # Output settings
 output:
   save_metadata: true

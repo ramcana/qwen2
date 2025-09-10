@@ -1,0 +1,9 @@
+models/
+models--*/
+generated_images/
+venv/
+*.log
+*.tmp
+.git/
+node_modules/
+test_model/

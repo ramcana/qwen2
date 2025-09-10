@@ -15,7 +15,7 @@ const Header: React.FC = () => {
               <p className="text-sm text-gray-500">Professional AI Image Generation</p>
             </div>
           </div>
-          
+
           <div className="flex items-center space-x-4">
             <div className="hidden md:flex items-center space-x-2 px-3 py-1 bg-gray-100 rounded-full">
               <Cpu className="w-4 h-4 text-gray-600" />

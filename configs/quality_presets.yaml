@@ -5,20 +5,20 @@
 vram_presets:
   # For systems with 12-14 GB VRAM (RTX 3080/3090)
   medium:
-    min_pixels: 518400   # 896x580 (518K pixels)
-    max_pixels: 1327104  # 1152x1152 (1.3M pixels)
+    min_pixels: 518400 # 896x580 (518K pixels)
+    max_pixels: 1327104 # 1152x1152 (1.3M pixels)
     description: "Safe mode for 12-14 GB VRAM systems"
-    
+
   # For systems with 16+ GB VRAM (RTX 4080/4090)
   high:
-    min_pixels: 518400   # 896x580 (518K pixels)
-    max_pixels: 2032128  # 1440x1440 (2.0M pixels)
+    min_pixels: 518400 # 896x580 (518K pixels)
+    max_pixels: 2032128 # 1440x1440 (2.0M pixels)
     description: "High quality for 16+ GB VRAM systems"
-    
+
   # For systems with 24+ GB VRAM (RTX 4090/6000 series)
   ultra:
-    min_pixels: 518400   # 896x580 (518K pixels)
-    max_pixels: 4194304  # 2048x2048 (4.1M pixels)
+    min_pixels: 518400 # 896x580 (518K pixels)
+    max_pixels: 4194304 # 2048x2048 (4.1M pixels)
     description: "Maximum quality for 24+ GB VRAM systems"
 
 # Aspect ratio presets with pixel counts
@@ -28,43 +28,43 @@ aspect_ratios:
     height: 1328
     pixels: 1763584
     description: "Square"
-    
+
   "16:9":
     width: 1664
     height: 928
     pixels: 1544192
     description: "Landscape"
-    
+
   "9:16":
     width: 928
     height: 1664
     pixels: 1544192
     description: "Portrait"
-    
+
   "4:3":
     width: 1472
     height: 1140
     pixels: 1678080
     description: "Photo"
-    
+
   "3:4":
     width: 1140
     height: 1472
     pixels: 1678080
     description: "Portrait photo"
-    
+
   "3:2":
     width: 1584
     height: 1056
     pixels: 1672704
     description: "Classic photo ratio"
-    
+
   "2:3":
     width: 1056
     height: 1584
     pixels: 1672704
     description: "Portrait classic"
-    
+
   "21:9":
     width: 1792
     height: 768
@@ -77,12 +77,12 @@ quality_presets:
     num_inference_steps: 20
     true_cfg_scale: 3.0
     description: "Fast preview - lower quality"
-    
+
   balanced:
     num_inference_steps: 50
     true_cfg_scale: 4.0
     description: "Recommended - good balance"
-    
+
   high:
     num_inference_steps: 80
     true_cfg_scale: 7.0

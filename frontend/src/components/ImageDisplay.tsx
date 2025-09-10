@@ -29,20 +29,20 @@ const ImageDisplay: React.FC<ImageDisplayProps> = () => {
 
   const handleDownload = () => {
     if (!generatedImage?.image_path) return;
-    
+
     const link = document.createElement('a');
     link.href = getImageUrl(generatedImage.image_path);
     link.download = `qwen-image-${Date.now()}.png`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    
+
     toast.success('Image downloaded!');
   };
 
   const handleCopyToClipboard = async () => {
     if (!generatedImage?.parameters?.prompt) return;
-    
+
     try {
       await navigator.clipboard.writeText(generatedImage.parameters.prompt);
       toast.success('Prompt copied to clipboard!');
@@ -64,7 +64,7 @@ const ImageDisplay: React.FC<ImageDisplayProps> = () => {
       <div className="card p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold text-gray-900">Generated Image</h2>
-          
+
           {displayImage && (
             <div className="flex items-center space-x-2">
               <button
@@ -104,7 +104,7 @@ const ImageDisplay: React.FC<ImageDisplayProps> = () => {
                 }`}
                 onClick={toggleFullscreen}
               />
-              
+
               {/* Overlay info */}
               <div className="absolute top-2 right-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-sm opacity-0 group-hover:opacity-100 transition-opacity">
                 {displayImage.parameters?.width} × {displayImage.parameters?.height}
@@ -126,7 +126,7 @@ const ImageDisplay: React.FC<ImageDisplayProps> = () => {
       {displayImage && (
         <div className="card p-4">
           <h3 className="font-semibold text-gray-900 mb-3">Generation Details</h3>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <div className="flex justify-between">
@@ -136,14 +136,14 @@ const ImageDisplay: React.FC<ImageDisplayProps> = () => {
                   {displayImage.generation_time?.toFixed(1)}s
                 </span>
               </div>
-              
+
               <div className="flex justify-between">
                 <span className="text-sm text-gray-600">Dimensions:</span>
                 <span className="text-sm font-medium">
                   {displayImage.parameters?.width} × {displayImage.parameters?.height}
                 </span>
               </div>
-              
+
               <div className="flex justify-between">
                 <span className="text-sm text-gray-600">Steps:</span>
                 <span className="text-sm font-medium">
@@ -151,7 +151,7 @@ const ImageDisplay: React.FC<ImageDisplayProps> = () => {
                 </span>
               </div>
             </div>
-            
+
             <div className="space-y-2">
               <div className="flex justify-between">
                 <span className="text-sm text-gray-600">CFG Scale:</span>
@@ -159,14 +159,14 @@ const ImageDisplay: React.FC<ImageDisplayProps> = () => {
                   {displayImage.parameters?.cfg_scale}
                 </span>
               </div>
-              
+
               <div className="flex justify-between">
                 <span className="text-sm text-gray-600">Seed:</span>
                 <span className="text-sm font-medium">
                   {displayImage.parameters?.seed}
                 </span>
               </div>
-              
+
               <div className="flex justify-between">
                 <span className="text-sm text-gray-600">Enhanced:</span>
                 <span className="text-sm font-medium">
@@ -175,7 +175,7 @@ const ImageDisplay: React.FC<ImageDisplayProps> = () => {
               </div>
             </div>
           </div>
-          
+
           {/* Prompt Display */}
           {displayImage.parameters?.prompt && (
             <div className="mt-4 pt-4 border-t">
@@ -187,7 +187,7 @@ const ImageDisplay: React.FC<ImageDisplayProps> = () => {
               </div>
             </div>
           )}
-          
+
           {/* Negative Prompt */}
           {displayImage.parameters?.negative_prompt && (
             <div className="mt-3">

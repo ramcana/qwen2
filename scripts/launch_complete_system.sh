@@ -84,7 +84,7 @@ while true; do
         echo "❌ Both processes have exited"
         break
     fi
-    
+
     # Check backend process
     if ! kill -0 $BACKEND_PID 2>/dev/null; then
         echo "❌ Backend process has exited"
@@ -95,13 +95,13 @@ while true; do
         BACKEND_PID=$!
         echo "✅ Backend restarted (PID: $BACKEND_PID)"
     fi
-    
+
     # Check frontend process
     if ! kill -0 $FRONTEND_PID 2>/dev/null; then
         echo "❌ Frontend process has exited"
         break
     fi
-    
+
     sleep 5
 done
 

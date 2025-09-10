@@ -1,0 +1,12 @@
+# Development tools
+pytest==7.0.0
+black==22.12.0
+flake8==6.0.0
+isort==5.12.0
+mypy==1.5.0
+bandit==1.7.5
+pre-commit==3.3.0
+ruff==0.2.2
+autopep8==2.0.0
+pylint==2.17.0
+codespell==2.2.5

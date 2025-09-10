@@ -76,7 +76,7 @@ If there are any issues, you might see:
 
 Or in extreme cases:
 ```
-⚠️ float16 loading failed: [reason]  
+⚠️ float16 loading failed: [reason]
 🔄 Trying with default settings...
 ✅ Model loaded with default settings
 ```

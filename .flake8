@@ -1,7 +1,7 @@
 [flake8]
 max-line-length = 88
 max-complexity = 12
-extend-ignore = 
+extend-ignore =
     # Black compatibility
     E203,  # whitespace before ':'
     E501,  # line too long (handled by black)
@@ -10,7 +10,7 @@ extend-ignore =
     # Other ignores
     E722,  # do not use bare 'except'
     B008,  # do not perform function calls in argument defaults
-exclude = 
+exclude =
     .git,
     __pycache__,
     .venv,

@@ -8,7 +8,7 @@ This directory contains diagnostic and utility tools for the Qwen2 Image Generat
 
 #### `test_device.py`
 **Purpose**: Comprehensive CUDA and device diagnostics
-**Usage**: 
+**Usage**:
 ```bash
 cd /home/ramji_t/projects/Qwen2
 source venv/bin/activate
@@ -17,7 +17,7 @@ python tools/test_device.py
 
 **What it checks**:
 - ✅ CUDA availability and configuration
-- ✅ GPU memory and specifications  
+- ✅ GPU memory and specifications
 - ✅ PyTorch tensor operations
 - ✅ Generator device compatibility
 - ✅ Model component initialization

@@ -9,17 +9,19 @@ import sys
 
 # Add src directory to Python path
 current_dir = os.path.dirname(os.path.abspath(__file__))
-src_dir = os.path.join(current_dir, 'src')
+src_dir = os.path.join(current_dir, "src")
 sys.path.insert(0, src_dir)
+
 
 def main():
     print("🎨 Starting Enhanced Qwen-Image Generator...")
     print("=" * 60)
-    
+
     try:
         from qwen_image_enhanced_ui import create_interface
-        
-        print("""
+
+        print(
+            """
 🚀 Enhanced Generator Features:
 
 Hardware Optimization:
@@ -43,8 +45,9 @@ Advanced Features:
 
 Access your interface at: http://localhost:7860
 Generated images saved to: ./generated_images/
-        """)
-        
+        """
+        )
+
         # Create and launch the interface
         demo = create_interface()
         demo.launch(
@@ -52,9 +55,9 @@ Generated images saved to: ./generated_images/
             server_port=7860,
             share=False,
             inbrowser=False,
-            max_file_size="50mb"
+            max_file_size="50mb",
         )
-        
+
     except Exception as e:
         print(f"❌ Error starting enhanced generator: {e}")
         print("\n🔧 Troubleshooting:")
@@ -62,6 +65,7 @@ Generated images saved to: ./generated_images/
         print("2. Check if models are accessible")
         print("3. Verify GPU drivers are up to date")
         return False
+
 
 if __name__ == "__main__":
     main()

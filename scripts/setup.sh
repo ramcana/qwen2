@@ -23,7 +23,7 @@ echo "🔧 Installing dependencies for Qwen-Image..."
 
 # Install PyTorch with CUDA support (optimized for RTX 4080)
 echo "Installing PyTorch with CUDA 12.1 support..."
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+pip install torch==2.3.1 torchvision==0.18.1 torchaudio==2.3.1 --index-url https://download.pytorch.org/whl/cu121
 
 # Install diffusers (required for Qwen-Image)
 echo "Installing diffusers library..."
@@ -31,13 +31,7 @@ pip install git+https://github.com/huggingface/diffusers.git
 
 # Install other required packages
 echo "Installing additional dependencies..."
-pip install transformers>=4.40.0
-pip install accelerate
-pip install safetensors
-pip install pillow
-pip install gradio
-pip install numpy
-pip install xformers  # For memory optimization
+pip install -r ../requirements.txt -c ../constraints.txt
 
 # Create requirements file
 cat > requirements.txt << EOF
@@ -111,7 +105,7 @@ QUALITY_PRESETS = {
 ASPECT_RATIOS = {
     "1:1": (1328, 1328),     # Square
     "16:9": (1664, 928),     # Landscape
-    "9:16": (928, 1664),     # Portrait  
+    "9:16": (928, 1664),     # Portrait
     "4:3": (1472, 1140),     # Photo
     "3:4": (1140, 1472),     # Portrait photo
     "21:9": (1792, 768),     # Ultra-wide
@@ -148,7 +142,7 @@ from qwen_image_config import MODEL_CONFIG, GENERATION_CONFIG
 
 def quick_test():
     print("🧪 Testing Qwen-Image setup...")
-    
+
     # Load model
     pipe = DiffusionPipeline.from_pretrained(
         MODEL_CONFIG["model_name"],
@@ -156,19 +150,19 @@ def quick_test():
         use_safetensors=MODEL_CONFIG["use_safetensors"],
         variant=MODEL_CONFIG["variant"]
     )
-    
+
     if torch.cuda.is_available():
         pipe = pipe.to("cuda")
         pipe.enable_attention_slicing()
         print("✅ Model loaded on GPU")
     else:
         print("⚠️  Model loaded on CPU")
-    
+
     # Test generation
     prompt = "A beautiful coffee shop with a neon sign reading 'AI Café', modern interior, warm lighting"
-    
+
     print(f"Generating: {prompt}")
-    
+
     image = pipe(
         prompt=prompt + ", Ultra HD, 4K, professional photography",
         width=GENERATION_CONFIG["width"],
@@ -177,7 +171,7 @@ def quick_test():
         true_cfg_scale=GENERATION_CONFIG["true_cfg_scale"],
         generator=torch.Generator(device="cuda" if torch.cuda.is_available() else "cpu").manual_seed(42)
     ).images[0]
-    
+
     # Save result
     image.save("test_generation.png")
     print("✅ Test image saved as 'test_generation.png'")
@@ -192,7 +186,7 @@ echo "🎉 Setup Complete!"
 echo ""
 echo "📋 What was installed:"
 echo "✅ PyTorch with CUDA 12.1 support"
-echo "✅ Diffusers library (latest version)"  
+echo "✅ Diffusers library (latest version)"
 echo "✅ Qwen-Image model configuration"
 echo "✅ Gradio web interface"
 echo "✅ Memory optimizations for RTX 4080"
@@ -206,7 +200,7 @@ echo ""
 echo "💾 Your RTX 4080 (16GB) is perfect for Qwen-Image!"
 echo "📊 Expected performance:"
 echo "   • Fast (20 steps): ~15-20 seconds"
-echo "   • Balanced (50 steps): ~30-40 seconds" 
+echo "   • Balanced (50 steps): ~30-40 seconds"
 echo "   • High Quality (80 steps): ~50-60 seconds"
 echo ""
 echo "🎨 Qwen-Image specializes in:"

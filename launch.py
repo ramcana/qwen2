@@ -10,23 +10,25 @@ import sys
 
 # Add src directory to Python path
 current_dir = os.path.dirname(os.path.abspath(__file__))
-src_dir = os.path.join(current_dir, 'src')
+src_dir = os.path.join(current_dir, "src")
 sys.path.insert(0, src_dir)
+
 
 def launch_standard_ui():
     """Launch the standard Qwen-Image UI"""
     print("🎨 Starting Qwen-Image Standard Generator...")
-    print("="*50)
-    
+    print("=" * 50)
+
     try:
         from qwen_image_ui import create_interface
-        
-        print("""
+
+        print(
+            """
 Hardware Optimization Status:
 - CPU: AMD Ryzen Threadripper PRO (Multi-core)
 - RAM: 128GB (Excellent for large models)
 - GPU: RTX 4080 (16GB VRAM) - Optimal for Qwen-Image
-        
+
 Model: Qwen-Image (20B parameters)
 Features:
 🎯 Text-to-Image Generation
@@ -36,8 +38,9 @@ Features:
 
 Access your interface at: http://localhost:7860
 Generated images saved to: ./generated_images/
-        """)
-        
+        """
+        )
+
         # Create and launch the interface
         demo = create_interface()
         demo.launch(
@@ -45,9 +48,9 @@ Generated images saved to: ./generated_images/
             server_port=7860,
             share=False,
             inbrowser=False,
-            max_file_size="50mb"
+            max_file_size="50mb",
         )
-        
+
     except ImportError as e:
         print(f"❌ Import error: {e}")
         print("Make sure all dependencies are installed:")
@@ -58,15 +61,17 @@ Generated images saved to: ./generated_images/
         return False
     return True
 
+
 def launch_enhanced_ui():
     """Launch the enhanced Qwen-Image UI with advanced features"""
     print("🎨 Starting Qwen-Image Enhanced Generator...")
-    print("="*50)
-    
+    print("=" * 50)
+
     try:
         from qwen_image_enhanced_ui import create_interface
-        
-        print("""
+
+        print(
+            """
 Hardware Optimization Status:
 - CPU: AMD Ryzen Threadripper PRO (Multi-core)
 - RAM: 128GB (Excellent for large models)
@@ -83,8 +88,9 @@ Enhanced Features:
 
 Access your interface at: http://localhost:7860
 Generated images saved to: ./generated_images/
-        """)
-        
+        """
+        )
+
         # Create and launch the enhanced interface
         demo = create_interface()
         demo.launch(
@@ -92,9 +98,9 @@ Generated images saved to: ./generated_images/
             server_port=7860,
             share=False,
             inbrowser=False,
-            max_file_size="50mb"
+            max_file_size="50mb",
         )
-        
+
     except ImportError as e:
         print(f"❌ Import error: {e}")
         print("Make sure all dependencies are installed:")
@@ -105,17 +111,21 @@ Generated images saved to: ./generated_images/
         return False
     return True
 
+
 def main():
-    parser = argparse.ArgumentParser(description='Qwen-Image Generator Launcher')
-    parser.add_argument('--mode', choices=['standard', 'enhanced', 'interactive'], 
-                       default='interactive',
-                       help='Launch mode: standard UI, enhanced UI, or interactive selection')
-    
+    parser = argparse.ArgumentParser(description="Qwen-Image Generator Launcher")
+    parser.add_argument(
+        "--mode",
+        choices=["standard", "enhanced", "interactive"],
+        default="interactive",
+        help="Launch mode: standard UI, enhanced UI, or interactive selection",
+    )
+
     args = parser.parse_args()
-    
-    if args.mode == 'standard':
+
+    if args.mode == "standard":
         launch_standard_ui()
-    elif args.mode == 'enhanced':
+    elif args.mode == "enhanced":
         launch_enhanced_ui()
     else:
         # Interactive mode - let user choose
@@ -126,29 +136,29 @@ def main():
         print("    • Qwen-Image model")
         print("    • Fast and reliable")
         print("    • Original features")
-        
+
         print("\n2️⃣  Enhanced UI - Full Feature Suite")
         print("    • Text-to-Image (Qwen-Image)")
         print("    • Image-to-Image transformation")
         print("    • Inpainting with mask editor")
         print("    • Super-resolution enhancement")
         print("    • Advanced controls")
-        
+
         print("\n0️⃣  Exit")
-        
+
         while True:
             try:
                 choice = input("\n🎯 Enter your choice (1/2/0): ").strip()
-                
-                if choice == '1':
+
+                if choice == "1":
                     print("\n🚀 Launching Standard UI...")
                     launch_standard_ui()
                     break
-                elif choice == '2':
+                elif choice == "2":
                     print("\n🚀 Launching Enhanced UI...")
                     launch_enhanced_ui()
                     break
-                elif choice == '0':
+                elif choice == "0":
                     print("\n👋 Goodbye!")
                     sys.exit(0)
                 else:
@@ -159,6 +169,7 @@ def main():
             except EOFError:
                 print("\n\n👋 Goodbye!")
                 sys.exit(0)
+
 
 if __name__ == "__main__":
     main()

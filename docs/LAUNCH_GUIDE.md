@@ -19,7 +19,7 @@ python launch.py
 # Using Python
 python launch.py --mode standard
 
-# Using shell script  
+# Using shell script
 ./scripts/launch_ui.sh  # Choose option 1
 ```
 
@@ -43,7 +43,7 @@ python launch.py --mode enhanced
 ```
 **Features:** Kills existing processes, cleans CUDA cache, then lets you choose UI mode
 
-#### Direct Enhanced Safe Restart  
+#### Direct Enhanced Safe Restart
 ```bash
 ./scripts/restart_enhanced.sh
 ```

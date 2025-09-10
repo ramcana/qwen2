@@ -1,3 +1,5 @@
+# CI workflow for Qwen-Image Generator
+# Resolved dependency conflicts between xformers and torch versions
 name: CI
 on: [push, pull_request]
 jobs:
@@ -9,6 +11,7 @@ jobs:
         with:
           python-version: "3.10"
       - run: pip install -U uv
+      # Install dependencies with resolved conflicts
       - run: uv pip install -r requirements.txt -c constraints.txt
       - run: pre-commit run -a
       - run: pytest -m "not gpu" -q

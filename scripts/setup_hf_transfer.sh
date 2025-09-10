@@ -20,18 +20,18 @@ elif [[ "$OSTYPE" == "linux-gnu"* ]] || [[ "$OSTYPE" == "darwin"* ]]; then
     echo "📦 Installing huggingface_hub and hf_transfer..."
     pip install -U huggingface_hub hf_transfer
     echo "📝 Adding environment variable to shell profile..."
-    
+
     # Add to shell profile
     if [ -f "$HOME/.bashrc" ]; then
         echo 'export HF_HUB_ENABLE_HF_TRANSFER=1' >> "$HOME/.bashrc"
         echo "✅ Added to .bashrc"
     fi
-    
+
     if [ -f "$HOME/.zshrc" ]; then
         echo 'export HF_HUB_ENABLE_HF_TRANSFER=1' >> "$HOME/.zshrc"
         echo "✅ Added to .zshrc"
     fi
-    
+
     # Export for current session
     export HF_HUB_ENABLE_HF_TRANSFER=1
     echo "✅ Rust accelerator enabled for current session!"

@@ -124,7 +124,7 @@ This document verifies that the React UI covers all Gradio functionality and pro
    - **API:** Already implemented
 
 2. **Inpainting Mode**
-   - **Priority:** High  
+   - **Priority:** High
    - **Implementation:** Requires mask drawing component (complex)
    - **API:** Needs endpoint extension
 

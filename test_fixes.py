@@ -46,9 +46,7 @@ def test_model_cache_directory():
         # Check if it has content
         files = list(cache_dir.rglob("*"))
         if files:
-            print(
-                f"✅ Model cache directory exists with {len(files)} files:", cache_dir
-            )
+            print(f"✅ Model cache directory exists with {len(files)} files:", cache_dir)
             return True
         else:
             print("⚠️ Model cache directory exists but is empty:", cache_dir)

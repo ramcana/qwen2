@@ -13,10 +13,10 @@ graph TB
     C --> D[Qwen-Image Model]
     C --> E[Memory Optimization Middleware]
     E --> F[GPU Memory Management]
-    
+
     G[Feature Flag System] --> B
     G --> H[Gradio UI :7860]
-    
+
     I[Unified Launcher] --> B
     I --> C
     I --> H
@@ -65,7 +65,7 @@ python src/ui_config_manager.py set-mode both
 # React only
 python src/ui_config_manager.py set-mode react
 
-# Gradio only  
+# Gradio only
 python src/ui_config_manager.py set-mode gradio
 
 # Both interfaces
@@ -296,7 +296,7 @@ export QWEN_API_HOST=0.0.0.0
 export QWEN_API_PORT=8000
 export QWEN_API_WORKERS=1
 
-# React Configuration  
+# React Configuration
 export REACT_APP_API_URL=http://your-domain:8000
 export PORT=3000
 

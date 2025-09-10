@@ -57,7 +57,7 @@ Write-Host ""
 
 do {
     $choice = Read-Host "🎯 Enter your choice (1/2/3/0)"
-    
+
     switch ($choice) {
         "1" {
             Write-Host ""

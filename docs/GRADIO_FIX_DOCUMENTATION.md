@@ -9,7 +9,7 @@ The error `Import "gradio" could not be resolved basedpyright(reportMissingImpor
 - Dependencies were not installed in an isolated environment
 - The system Python interpreter couldn't find the `gradio` package
 
-### 2. **Uninstalled Dependencies** 
+### 2. **Uninstalled Dependencies**
 - Although `requirements.txt` listed `gradio>=4.0.0`, the package wasn't actually installed
 - The Python environment was missing all AI/ML dependencies including PyTorch, transformers, etc.
 

@@ -17,7 +17,7 @@ source scripts/activate.sh
 # Recommended: Safe start (prevents segfaults)
 ./scripts/safe_restart.sh
 
-# Alternative: Full diagnostic start  
+# Alternative: Full diagnostic start
 ./scripts/restart_ui.sh
 
 # Just activate environment

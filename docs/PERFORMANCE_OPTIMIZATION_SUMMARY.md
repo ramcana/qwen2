@@ -7,7 +7,7 @@ Your AMD Threadripper PRO 5995WX + RTX 4080 + 128GB RAM system was generating im
 ## 🔍 Root Causes Identified
 
 1. **Sequential CPU Offload Enabled** - Major performance killer forcing model components to slow CPU
-2. **Conservative VRAM Limits** - Only using 12GB of your 17GB VRAM  
+2. **Conservative VRAM Limits** - Only using 12GB of your 17GB VRAM
 3. **Attention Slicing Enabled** - Trading speed for memory you don't need
 4. **Device Mapping to CPU** - Forcing CPU usage instead of pure GPU
 5. **Low CPU Memory Usage** - Inefficient with your 67GB RAM
@@ -141,7 +141,7 @@ image, message = generator.generate_image(
 The optimized system includes built-in performance monitoring:
 
 - **Generation time tracking**
-- **VRAM usage monitoring** 
+- **VRAM usage monitoring**
 - **Steps per second calculation**
 - **Performance warnings** if generation > 100s
 - **Hardware verification** during startup

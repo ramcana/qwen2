@@ -47,14 +47,14 @@ self.edit_pipe = QwenImageEditPipeline.from_pretrained(
 if torch.cuda.is_available():
     # Move to device and apply optimizations
     self.edit_pipe = self.edit_pipe.to(self.device)
-    
+
     if MEMORY_CONFIG["enable_attention_slicing"]:
         try:
             self.edit_pipe.enable_attention_slicing()
             print("✅ Attention slicing enabled for Qwen-Image-Edit")
         except Exception as opt_error:
             print(f"⚠️ Could not enable attention slicing: {opt_error}")
-    
+
     # Verify device consistency for edit pipeline
     self._verify_edit_pipeline_devices()
 ```

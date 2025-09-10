@@ -87,7 +87,7 @@ const StatusBar: React.FC<StatusBarProps> = ({ status, isLoading }) => {
               </p>
             </div>
           </div>
-          
+
           {!status.model_loaded && (
             <button
               onClick={() => initializeMutation.mutate()}
@@ -123,13 +123,13 @@ const StatusBar: React.FC<StatusBarProps> = ({ status, isLoading }) => {
               <span className="ml-1">Clear</span>
             </button>
           </div>
-          
+
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
               <span>Used: {status.memory_info.allocated_gb}GB</span>
               <span>Total: {status.memory_info.total_gb}GB</span>
             </div>
-            
+
             <div className="w-full bg-gray-200 rounded-full h-2">
               <div
                 className={`h-2 rounded-full ${
@@ -140,7 +140,7 @@ const StatusBar: React.FC<StatusBarProps> = ({ status, isLoading }) => {
                 style={{ width: `${status.memory_info.usage_percent}%` }}
               />
             </div>
-            
+
             <div className="flex justify-between text-xs text-gray-500">
               <span>{status.memory_info.usage_percent}% used</span>
               {status.memory_info.device_name && (

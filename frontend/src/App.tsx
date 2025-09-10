@@ -22,7 +22,7 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
-      
+
       <main className="container mx-auto px-4 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Panel - Controls */}
@@ -30,14 +30,14 @@ const App: React.FC = () => {
             <StatusBar status={status} isLoading={isLoading} />
             <GenerationPanel />
           </div>
-          
+
           {/* Right Panel - Results */}
           <div className="lg:col-span-2">
             <ImageDisplay />
           </div>
         </div>
       </main>
-      
+
       {/* Footer */}
       <footer className="bg-white border-t mt-12">
         <div className="container mx-auto px-4 py-6 text-center text-gray-600">

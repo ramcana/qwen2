@@ -15,7 +15,7 @@ This directory contains all shell scripts and automation tools for the Qwen2 Ima
 
 ### `restart_ui.sh`
 **Purpose**: Full restart with comprehensive device fixes
-**Usage**: `./scripts/restart_ui.sh`  
+**Usage**: `./scripts/restart_ui.sh`
 **Features**:
 - 🔧 Comprehensive device diagnostics
 - 🧹 Aggressive CUDA cleanup
