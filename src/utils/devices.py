@@ -8,6 +8,7 @@ import logging
 import os
 import shutil
 import time
+import subprocess
 from typing import Any, Dict, Optional, Tuple, Type
 
 import torch
@@ -385,12 +386,26 @@ def check_driver_version() -> str:
     Returns:
         str: Driver version string or "Not available"
     """
-    if torch.cuda.is_available():
+    if not torch.cuda.is_available():
+        return "Not available"
+    try:
+        # Prefer querying through PyTorch when available
+        return str(torch.cuda.driver_version())
+    except Exception:
         try:
-            return torch.cuda.get_device_properties(0).major
-        except:
+            import subprocess
+
+            output = subprocess.check_output(
+                [
+                    "nvidia-smi",
+                    "--query-gpu=driver_version",
+                    "--format=csv,noheader",
+                ],
+                encoding="utf-8",
+            )
+            return output.strip().split("\n")[0]
+        except Exception:
             return "Unknown"
-    return "Not available"
 
 
 def perform_preflight_checks(min_disk_space_gb: float = 25.0) -> Dict[str, Any]:

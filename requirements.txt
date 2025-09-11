@@ -7,7 +7,7 @@ torchvision>=0.16.0
 torchaudio>=2.1.0
 
 # Diffusion models and transformers (latest for Qwen-Image-Edit support)
-git+https://github.com/huggingface/diffusers.git
+diffusers==0.27.0
 transformers>=4.40.0
 accelerate>=0.20.0
 safetensors>=0.3.0
