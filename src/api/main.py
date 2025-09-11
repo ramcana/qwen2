@@ -5,7 +5,7 @@ Memory-optimized endpoints with advanced image generation capabilities
 """
 
 import os
-import sys
+import asyncio
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -16,11 +16,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-# Add parent directories to path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
-from src.qwen_generator import QwenImageGenerator
-from src.qwen_image_config import ASPECT_RATIOS
+from ..qwen_generator import QwenImageGenerator
+from ..qwen_image_config import ASPECT_RATIOS
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -43,7 +40,7 @@ app.add_middleware(
 # Global generator instance
 generator: Optional[QwenImageGenerator] = None
 generation_queue: List[Dict[str, Any]] = []
-is_generating = False
+generator_lock = asyncio.Lock()
 
 
 # Pydantic models for API requests/responses
@@ -164,7 +161,7 @@ async def get_status():
         gpu_available=torch.cuda.is_available(),
         memory_info=memory_info,
         queue_size=len(generation_queue),
-        is_generating=is_generating
+        is_generating=generator_lock.locked()
     )
 
 
@@ -191,9 +188,7 @@ async def generate_text_to_image(
     background_tasks: BackgroundTasks
 ):
     """Generate image from text prompt"""
-    global is_generating
-    
-    if is_generating:
+    if generator_lock.locked():
         # Add to queue instead of rejecting
         job_id = f"job_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{len(generation_queue)}"
         generation_queue.append({
@@ -210,57 +205,54 @@ async def generate_text_to_image(
         )
     
     try:
-        is_generating = True
-        await clear_gpu_memory()
-        
-        gen = await get_generator()
-        
-        # Apply aspect ratio if provided
-        if request.aspect_ratio and request.aspect_ratio in ASPECT_RATIOS:
-            request.width, request.height = ASPECT_RATIOS[request.aspect_ratio]
-        
-        # Generate image
-        start_time = datetime.now()
-        
-        # Use the actual generator method
-        image, message = gen.generate_image(
-            prompt=request.prompt,
-            negative_prompt=request.negative_prompt or "",
-            width=request.width,
-            height=request.height,
-            num_inference_steps=request.num_inference_steps,
-            cfg_scale=request.cfg_scale,
-            seed=request.seed,
-            language=request.language,
-            enhance_prompt_flag=request.enhance_prompt
-        )
-        
-        generation_time = (datetime.now() - start_time).total_seconds()
-        
-        if image is None:
-            raise HTTPException(status_code=500, detail=message)
-        
-        # Save image and get path
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"api_generated_{timestamp}.png"
-        image_path = os.path.join("generated_images", filename)
-        image.save(image_path)
-        
-        # Schedule memory cleanup
-        background_tasks.add_task(clear_gpu_memory)
-        
-        return GenerationResponse(
-            success=True,
-            image_path=image_path,
-            message=message,
-            generation_time=generation_time,
-            parameters=request.dict()
-        )
-        
+        async with generator_lock:
+            await clear_gpu_memory()
+
+            gen = await get_generator()
+
+            # Apply aspect ratio if provided
+            if request.aspect_ratio and request.aspect_ratio in ASPECT_RATIOS:
+                request.width, request.height = ASPECT_RATIOS[request.aspect_ratio]
+
+            # Generate image
+            start_time = datetime.now()
+
+            image, message = gen.generate_image(
+                prompt=request.prompt,
+                negative_prompt=request.negative_prompt or "",
+                width=request.width,
+                height=request.height,
+                num_inference_steps=request.num_inference_steps,
+                cfg_scale=request.cfg_scale,
+                seed=request.seed,
+                language=request.language,
+                enhance_prompt_flag=request.enhance_prompt
+            )
+
+            generation_time = (datetime.now() - start_time).total_seconds()
+
+            if image is None:
+                raise HTTPException(status_code=500, detail=message)
+
+            # Save image and get path
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"api_generated_{timestamp}.png"
+            image_path = os.path.join("generated_images", filename)
+            image.save(image_path)
+
+            # Schedule memory cleanup
+            background_tasks.add_task(clear_gpu_memory)
+
+            return GenerationResponse(
+                success=True,
+                image_path=image_path,
+                message=message,
+                generation_time=generation_time,
+                parameters=request.dict()
+            )
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Generation failed: {str(e)}")
-    finally:
-        is_generating = False
 
 
 @app.post("/generate/image-to-image", response_model=GenerationResponse)
@@ -269,9 +261,7 @@ async def generate_image_to_image(
     background_tasks: BackgroundTasks
 ):
     """Generate image from image + text prompt"""
-    global is_generating
-    
-    if is_generating:
+    if generator_lock.locked():
         job_id = f"job_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{len(generation_queue)}"
         generation_queue.append({
             "job_id": job_id,
@@ -287,59 +277,55 @@ async def generate_image_to_image(
         )
     
     try:
-        is_generating = True
-        await clear_gpu_memory()
-        
-        gen = await get_generator()
-        
-        # Load input image
-        from PIL import Image
-        if not os.path.exists(request.init_image_path):
-            raise HTTPException(status_code=404, detail="Input image not found")
-        
-        init_image = Image.open(request.init_image_path)
-        
-        start_time = datetime.now()
-        
-        image, message = gen.generate_img2img(
-            prompt=request.prompt,
-            negative_prompt=request.negative_prompt or "",
-            init_image=init_image,
-            strength=request.strength,
-            width=request.width,
-            height=request.height,
-            num_inference_steps=request.num_inference_steps,
-            cfg_scale=request.cfg_scale,
-            seed=request.seed,
-            language=request.language,
-            enhance_prompt_flag=request.enhance_prompt
-        )
-        
-        generation_time = (datetime.now() - start_time).total_seconds()
-        
-        if image is None:
-            raise HTTPException(status_code=500, detail=message)
-        
-        # Save result
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"api_img2img_{timestamp}.png"
-        image_path = os.path.join("generated_images", filename)
-        image.save(image_path)
-        
-        background_tasks.add_task(clear_gpu_memory)
-        
-        return GenerationResponse(
-            success=True,
-            image_path=image_path,
-            message=message,
-            generation_time=generation_time,
-            parameters=request.dict()
-        )
-        
+        async with generator_lock:
+            await clear_gpu_memory()
+
+            gen = await get_generator()
+
+            from PIL import Image
+            if not os.path.exists(request.init_image_path):
+                raise HTTPException(status_code=404, detail="Input image not found")
+
+            init_image = Image.open(request.init_image_path)
+
+            start_time = datetime.now()
+
+            image, message = gen.generate_img2img(
+                prompt=request.prompt,
+                negative_prompt=request.negative_prompt or "",
+                init_image=init_image,
+                strength=request.strength,
+                width=request.width,
+                height=request.height,
+                num_inference_steps=request.num_inference_steps,
+                cfg_scale=request.cfg_scale,
+                seed=request.seed,
+                language=request.language,
+                enhance_prompt_flag=request.enhance_prompt
+            )
+
+            generation_time = (datetime.now() - start_time).total_seconds()
+
+            if image is None:
+                raise HTTPException(status_code=500, detail=message)
+
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"api_img2img_{timestamp}.png"
+            image_path = os.path.join("generated_images", filename)
+            image.save(image_path)
+
+            background_tasks.add_task(clear_gpu_memory)
+
+            return GenerationResponse(
+                success=True,
+                image_path=image_path,
+                message=message,
+                generation_time=generation_time,
+                parameters=request.dict()
+            )
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Image-to-image generation failed: {str(e)}")
-    finally:
-        is_generating = False
 
 
 @app.get("/queue")
@@ -347,7 +333,7 @@ async def get_queue():
     """Get current generation queue status"""
     return {
         "queue_size": len(generation_queue),
-        "is_generating": is_generating,
+        "is_generating": generator_lock.locked(),
         "queue": generation_queue[:5]  # Show first 5 items
     }
 

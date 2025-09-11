@@ -13,11 +13,14 @@ import PIL.Image
 import torch
 from diffusers import DiffusionPipeline
 from PIL import ImageFilter
+import logging
+
+logger = logging.getLogger(__name__)
 
 try:
     from diffusers import QwenImageEditPipeline
 except ImportError:
-    print("⚠️ QwenImageEditPipeline not available. Enhanced features will be limited.")
+    logger.warning("⚠️ QwenImageEditPipeline not available. Enhanced features will be limited.")
     QwenImageEditPipeline = None
 
 from .qwen_image_config import (
@@ -38,164 +41,162 @@ class QwenImageGenerator:
         self.output_dir: str = "generated_images"
         os.makedirs(self.output_dir, exist_ok=True)
         
-        print(f"Using device: {self.device}")
+        logger.info(f"Using device: {self.device}")
         if torch.cuda.is_available():
-            print(f"GPU: {torch.cuda.get_device_name()}")
-            print(f"VRAM: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f}GB")
+            logger.info(f"GPU: {torch.cuda.get_device_name()}")
+            logger.info(f"VRAM: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f}GB")
         
-        print("\n📋 Qwen Model Usage:")
-        print("   • Qwen-Image: Text-to-image generation")
-        print("   • Qwen-Image-Edit: Image editing with reference images")
+        logger.info("\n📋 Qwen Model Usage:")
+        logger.info("   • Qwen-Image: Text-to-image generation")
+        logger.info("   • Qwen-Image-Edit: Image editing with reference images")
     
     def load_model(self) -> bool:
         """Load Qwen-Image diffusion pipeline"""
         try:
-            print("Loading Qwen-Image model... This may take a few minutes.")
-            print(f"Attempting to load: {self.model_name}")
-            
-            # First try: Load with optimal settings for RTX 4080
-            try:
-                self.pipe = DiffusionPipeline.from_pretrained(
-                    self.model_name, 
-                    torch_dtype=MODEL_CONFIG["torch_dtype"],
-                    use_safetensors=MODEL_CONFIG["use_safetensors"]
-                )
-                print("✅ Model loaded with bfloat16 precision")
-            except Exception as e1:
-                print(f"⚠️  bfloat16 loading failed: {e1}")
-                print("🔄 Trying with float16...")
-                
-                # Fallback: Try with float16
-                try:
-                    self.pipe = DiffusionPipeline.from_pretrained(
-                        self.model_name, 
-                        torch_dtype=torch.float16,
-                        use_safetensors=MODEL_CONFIG["use_safetensors"]
-                    )
-                    print("✅ Model loaded with float16 precision")
-                except Exception as e2:
-                    print(f"⚠️  float16 loading failed: {e2}")
-                    print("🔄 Trying with default settings...")
-                    
-                    # Final fallback: Default settings
-                    self.pipe = DiffusionPipeline.from_pretrained(
-                        self.model_name,
-                        use_safetensors=False  # Try without safetensors if needed
-                    )
-                    print("✅ Model loaded with default settings")
-            
-            # Move to GPU and apply optimizations
+            logger.info("Loading Qwen-Image model... This may take a few minutes.")
+            logger.info(f"Attempting to load: {self.model_name}")
+
+            self._load_pipeline()
+
             if torch.cuda.is_available():
-                print(f"🔄 Moving model to GPU: {self.device}")
-                
-                # First: Move the entire pipeline
-                self.pipe = self.pipe.to(self.device)
-                
-                # Second: Explicitly move all subcomponents
-                component_count = 0
-                if hasattr(self.pipe, 'unet') and self.pipe.unet is not None:
-                    self.pipe.unet = self.pipe.unet.to(self.device)
-                    # Ensure all parameters are on device
-                    for param in self.pipe.unet.parameters():
-                        param.data = param.data.to(self.device)
-                    component_count += 1
-                    print(f"✅ UNet moved to {self.device} ({sum(p.numel() for p in self.pipe.unet.parameters())} parameters)")
-                
-                if hasattr(self.pipe, 'vae') and self.pipe.vae is not None:
-                    self.pipe.vae = self.pipe.vae.to(self.device)
-                    # Ensure all parameters are on device
-                    for param in self.pipe.vae.parameters():
-                        param.data = param.data.to(self.device)
-                    component_count += 1
-                    print(f"✅ VAE moved to {self.device} ({sum(p.numel() for p in self.pipe.vae.parameters())} parameters)")
-                
-                if hasattr(self.pipe, 'text_encoder') and self.pipe.text_encoder is not None:
-                    self.pipe.text_encoder = self.pipe.text_encoder.to(self.device)
-                    # Ensure all parameters are on device
-                    for param in self.pipe.text_encoder.parameters():
-                        param.data = param.data.to(self.device)
-                    component_count += 1
-                    print(f"✅ Text encoder moved to {self.device} ({sum(p.numel() for p in self.pipe.text_encoder.parameters())} parameters)")
-                
-                # Check for additional components (excluding scheduler)
-                additional_components = ['safety_checker', 'feature_extractor']
-                for comp_name in additional_components:
-                    if hasattr(self.pipe, comp_name) and getattr(self.pipe, comp_name) is not None:
-                        try:
-                            component = getattr(self.pipe, comp_name)
-                            if hasattr(component, 'to'):
-                                component = component.to(self.device)
-                                setattr(self.pipe, comp_name, component)
-                                component_count += 1
-                                print(f"✅ {comp_name} moved to {self.device}")
-                        except Exception as e:
-                            print(f"⚠️ Could not move {comp_name}: {e}")
-                
-                # Handle scheduler separately (it typically doesn't have parameters)
-                if hasattr(self.pipe, 'scheduler') and self.pipe.scheduler is not None:
-                    # Schedulers don't typically need device movement
-                    print("✅ Scheduler noted (no device movement needed)")
-                    component_count += 1
-                
-                # Force garbage collection and ensure all tensors are moved
-                import gc
-                gc.collect()
-                torch.cuda.empty_cache()
-                
-                print(f"📊 Total components processed: {component_count}")
-                
-                # Apply memory optimizations
-                if MEMORY_CONFIG["enable_attention_slicing"]:
-                    self.pipe.enable_attention_slicing()
-                    print("✅ Attention slicing enabled")
-                
-                if MEMORY_CONFIG["enable_cpu_offload"]:
-                    self.pipe.enable_model_cpu_offload()
-                    print("✅ CPU offload enabled")
-                
-                if MEMORY_CONFIG["enable_sequential_cpu_offload"]:
-                    self.pipe.enable_sequential_cpu_offload()
-                    print("✅ Sequential CPU offload enabled")
+                self._move_pipeline_to_device()
+                self._apply_memory_optimizations()
             else:
-                print("⚠️ CUDA not available, using CPU")
-                
-            print("✅ Qwen-Image model loaded successfully!")
-            
-            # Load Qwen-Image-Edit for enhanced features
+                logger.warning("⚠️ CUDA not available, using CPU")
+
+            logger.info("✅ Qwen-Image model loaded successfully!")
+
             self._load_qwen_edit_pipeline()
-            
-            # Verify device setup
             self.verify_device_setup()
-            
+
             return True
             
         except Exception as e:
-            print(f"❌ Error loading model: {e}")
-            print("💡 Troubleshooting tips:")
-            print("   1. Check internet connection for model download")
-            print("   2. Ensure sufficient disk space (~60-70GB)")
-            print("   3. Verify CUDA installation if using GPU")
-            print("   4. Try restarting the application")
+            logger.error(f"❌ Error loading model: {e}")
+            logger.info("💡 Troubleshooting tips:")
+            logger.info("   1. Check internet connection for model download")
+            logger.info("   2. Ensure sufficient disk space (~60-70GB)")
+            logger.info("   3. Verify CUDA installation if using GPU")
+            logger.info("   4. Try restarting the application")
             return False
+
+    def _load_pipeline(self) -> None:
+        """Load diffusion pipeline with precision fallbacks"""
+        try:
+            self.pipe = DiffusionPipeline.from_pretrained(
+                self.model_name,
+                torch_dtype=MODEL_CONFIG["torch_dtype"],
+                use_safetensors=MODEL_CONFIG["use_safetensors"],
+            )
+            logger.info("✅ Model loaded with bfloat16 precision")
+        except Exception as e1:
+            logger.warning(f"⚠️  bfloat16 loading failed: {e1}")
+            logger.info("🔄 Trying with float16...")
+            try:
+                self.pipe = DiffusionPipeline.from_pretrained(
+                    self.model_name,
+                    torch_dtype=torch.float16,
+                    use_safetensors=MODEL_CONFIG["use_safetensors"],
+                )
+                logger.info("✅ Model loaded with float16 precision")
+            except Exception as e2:
+                logger.warning(f"⚠️  float16 loading failed: {e2}")
+                logger.info("🔄 Trying with default settings...")
+                self.pipe = DiffusionPipeline.from_pretrained(
+                    self.model_name,
+                    use_safetensors=False,
+                )
+                logger.info("✅ Model loaded with default settings")
+
+    def _move_pipeline_to_device(self) -> None:
+        """Move pipeline components to target device"""
+        logger.info(f"🔄 Moving model to GPU: {self.device}")
+        self.pipe = self.pipe.to(self.device)
+
+        component_count = 0
+        if hasattr(self.pipe, "unet") and self.pipe.unet is not None:
+            self.pipe.unet = self.pipe.unet.to(self.device)
+            for param in self.pipe.unet.parameters():
+                param.data = param.data.to(self.device)
+            component_count += 1
+            logger.info(
+                f"✅ UNet moved to {self.device} ({sum(p.numel() for p in self.pipe.unet.parameters())} parameters)"
+            )
+
+        if hasattr(self.pipe, "vae") and self.pipe.vae is not None:
+            self.pipe.vae = self.pipe.vae.to(self.device)
+            for param in self.pipe.vae.parameters():
+                param.data = param.data.to(self.device)
+            component_count += 1
+            logger.info(
+                f"✅ VAE moved to {self.device} ({sum(p.numel() for p in self.pipe.vae.parameters())} parameters)"
+            )
+
+        if hasattr(self.pipe, "text_encoder") and self.pipe.text_encoder is not None:
+            self.pipe.text_encoder = self.pipe.text_encoder.to(self.device)
+            for param in self.pipe.text_encoder.parameters():
+                param.data = param.data.to(self.device)
+            component_count += 1
+            logger.info(
+                f"✅ Text encoder moved to {self.device} ({sum(p.numel() for p in self.pipe.text_encoder.parameters())} parameters)"
+            )
+
+        additional_components = ["safety_checker", "feature_extractor"]
+        for comp_name in additional_components:
+            if hasattr(self.pipe, comp_name) and getattr(self.pipe, comp_name) is not None:
+                try:
+                    component = getattr(self.pipe, comp_name)
+                    if hasattr(component, "to"):
+                        component = component.to(self.device)
+                        setattr(self.pipe, comp_name, component)
+                        component_count += 1
+                        logger.info(f"✅ {comp_name} moved to {self.device}")
+                except Exception as e:
+                    logger.warning(f"⚠️ Could not move {comp_name}: {e}")
+
+        if hasattr(self.pipe, "scheduler") and self.pipe.scheduler is not None:
+            logger.info("✅ Scheduler noted (no device movement needed)")
+            component_count += 1
+
+        import gc
+
+        gc.collect()
+        torch.cuda.empty_cache()
+
+        logger.info(f"📊 Total components processed: {component_count}")
+
+    def _apply_memory_optimizations(self) -> None:
+        """Apply memory optimization settings to pipeline"""
+        if MEMORY_CONFIG["enable_attention_slicing"]:
+            self.pipe.enable_attention_slicing()
+            logger.info("✅ Attention slicing enabled")
+
+        if MEMORY_CONFIG["enable_cpu_offload"]:
+            self.pipe.enable_model_cpu_offload()
+            logger.info("✅ CPU offload enabled")
+
+        if MEMORY_CONFIG["enable_sequential_cpu_offload"]:
+            self.pipe.enable_sequential_cpu_offload()
+            logger.info("✅ Sequential CPU offload enabled")
     
     def _load_qwen_edit_pipeline(self) -> None:
         """Load Qwen-Image-Edit pipeline for enhanced features using HF Hub API"""
         if QwenImageEditPipeline is None:
-            print("⚠️ QwenImageEditPipeline not available. Install latest diffusers from GitHub.")
-            print("   Enhanced features will use alternative methods.")
+            logger.warning("⚠️ QwenImageEditPipeline not available. Install latest diffusers from GitHub.")
+            logger.warning("   Enhanced features will use alternative methods.")
             self.edit_pipe = None
             return
             
         try:
-            print("🔄 Loading Qwen-Image-Edit pipeline for enhanced features...")
-            print("   Using HuggingFace Hub API for better download reliability")
+            logger.info("🔄 Loading Qwen-Image-Edit pipeline for enhanced features...")
+            logger.info("   Using HuggingFace Hub API for better download reliability")
             
             # Import HuggingFace Hub for better download handling
             try:
                 from huggingface_hub import repo_info, snapshot_download
                 use_hub_api = True
             except ImportError:
-                print("⚠️ huggingface_hub not available, using standard method")
+                logger.warning("⚠️ huggingface_hub not available, using standard method")
                 use_hub_api = False
             
             # Load Qwen-Image-Edit model with improved download handling
@@ -205,10 +206,10 @@ class QwenImageGenerator:
                     try:
                         repo_data = repo_info("Qwen/Qwen-Image-Edit")
                         total_size = sum(file.size for file in repo_data.siblings if file.size)
-                        print(f"📊 Model size: {self._format_size(total_size)} (~20GB)")
-                        print("💡 Download will resume automatically if interrupted")
+                        logger.info(f"📊 Model size: {self._format_size(total_size)} (~20GB)")
+                        logger.info("💡 Download will resume automatically if interrupted")
                     except Exception:
-                        print("📊 Model size: ~20GB (estimated)")
+                        logger.info("📊 Model size: ~20GB (estimated)")
                 
                 # Load with optimized settings for your hardware (128GB RAM)
                 self.edit_pipe = QwenImageEditPipeline.from_pretrained(
@@ -227,44 +228,44 @@ class QwenImageGenerator:
                         # Apply memory optimizations if available
                         try:
                             self.edit_pipe.enable_attention_slicing()
-                            print("✅ Attention slicing enabled for Qwen-Image-Edit")
+                            logger.info("✅ Attention slicing enabled for Qwen-Image-Edit")
                         except Exception as opt_error:
-                            print(f"⚠️ Could not enable attention slicing: {opt_error}")
+                            logger.warning(f"⚠️ Could not enable attention slicing: {opt_error}")
                     
                     # Verify device consistency for edit pipeline
                     self._verify_edit_pipeline_devices()
                 
-                print("✅ Qwen-Image-Edit pipeline loaded successfully!")
-                print("   • Image-to-Image editing available")
-                print("   • Inpainting capabilities available")
-                print("   • Text editing in images available")
+                logger.info("✅ Qwen-Image-Edit pipeline loaded successfully!")
+                logger.info("   • Image-to-Image editing available")
+                logger.info("   • Inpainting capabilities available")
+                logger.info("   • Text editing in images available")
                 
             except Exception as download_error:
                 error_msg = str(download_error)
-                print(f"⚠️ Could not download/load Qwen-Image-Edit: {download_error}")
+                logger.warning(f"⚠️ Could not download/load Qwen-Image-Edit: {download_error}")
                 
                 # Provide specific guidance based on error type
                 if "Connection" in error_msg or "timeout" in error_msg.lower():
-                    print("🌐 Network issue detected. Try:")
-                    print("   1. Check internet connection stability")
-                    print("   2. Use the enhanced downloader: python tools/download_qwen_edit_hub.py")
-                    print("   3. Download will auto-resume if interrupted")
+                    logger.info("🌐 Network issue detected. Try:")
+                    logger.info("   1. Check internet connection stability")
+                    logger.info("   2. Use the enhanced downloader: python tools/download_qwen_edit_hub.py")
+                    logger.info("   3. Download will auto-resume if interrupted")
                 elif "disk" in error_msg.lower() or "space" in error_msg.lower():
-                    print("💾 Disk space issue. Ensure ~25GB free space available")
+                    logger.info("💾 Disk space issue. Ensure ~25GB free space available")
                 elif "permission" in error_msg.lower():
-                    print("🔒 Permission issue. Check write access to cache directory")
+                    logger.info("🔒 Permission issue. Check write access to cache directory")
                 else:
-                    print("💡 General troubleshooting:")
-                    print("   1. Try: python tools/download_qwen_edit_hub.py")
-                    print("   2. Check HuggingFace Hub accessibility")
-                    print("   3. Ensure sufficient disk space (~25GB)")
+                    logger.info("💡 General troubleshooting:")
+                    logger.info("   1. Try: python tools/download_qwen_edit_hub.py")
+                    logger.info("   2. Check HuggingFace Hub accessibility")
+                    logger.info("   3. Ensure sufficient disk space (~25GB)")
                 
-                print("   Enhanced features will use alternative approaches.")
+                logger.info("   Enhanced features will use alternative approaches.")
                 self.edit_pipe = None
                 
         except Exception as e:
-            print(f"⚠️ Error loading Qwen-Image-Edit pipeline: {e}")
-            print("   Enhanced features will use creative text-to-image approaches.")
+            logger.error(f"⚠️ Error loading Qwen-Image-Edit pipeline: {e}")
+            logger.info("   Enhanced features will use creative text-to-image approaches.")
             self.edit_pipe = None
     
     @staticmethod
@@ -281,7 +282,7 @@ class QwenImageGenerator:
         if not self.edit_pipe:
             return False
             
-        print(f"🔍 Verifying Qwen-Image-Edit pipeline devices for {self.device}:")
+        logger.info(f"🔍 Verifying Qwen-Image-Edit pipeline devices for {self.device}:")
         
         try:
             # Check components safely
@@ -303,51 +304,51 @@ class QwenImageGenerator:
                             except (StopIteration, AttributeError):
                                 comp_device = "unknown"
                         
-                        print(f"   {comp_name.upper()}: {comp_device}")
+                        logger.info(f"   {comp_name.upper()}: {comp_device}")
                         
                         if comp_device != self.device and comp_device != "unknown":
-                            print(f"   🔧 Moving {comp_name} from {comp_device} to {self.device}")
+                            logger.info(f"   🔧 Moving {comp_name} from {comp_device} to {self.device}")
                             try:
                                 component = component.to(self.device)
                                 setattr(self.edit_pipe, comp_name, component)
-                                print(f"   ✅ {comp_name} moved successfully")
+                                logger.info(f"   ✅ {comp_name} moved successfully")
                             except Exception as move_error:
-                                print(f"   ⚠️ Could not move {comp_name}: {move_error}")
+                                logger.warning(f"   ⚠️ Could not move {comp_name}: {move_error}")
                                 all_correct = False
                                 
                     except Exception as comp_error:
-                        print(f"   {comp_name.upper()}: error checking device ({comp_error})")
+                        logger.info(f"   {comp_name.upper()}: error checking device ({comp_error})")
                         all_correct = False
             
             # Check scheduler
             if hasattr(self.edit_pipe, 'scheduler') and self.edit_pipe.scheduler is not None:
-                print(f"   SCHEDULER: present ({type(self.edit_pipe.scheduler).__name__})")
+                logger.info(f"   SCHEDULER: present ({type(self.edit_pipe.scheduler).__name__})")
             
             # Summary
             if all_correct:
-                print(f"✅ Qwen-Image-Edit pipeline verified on {self.device}")
+                logger.info(f"✅ Qwen-Image-Edit pipeline verified on {self.device}")
                 return True
             else:
-                print("⚠️ Some edit pipeline components needed adjustment")
+                logger.warning("⚠️ Some edit pipeline components needed adjustment")
                 return False
                 
         except Exception as e:
-            print(f"❌ Edit pipeline device verification failed: {e}")
+            logger.error(f"❌ Edit pipeline device verification failed: {e}")
             return False
     
     def verify_device_setup(self) -> bool:
         """Verify model components are on the correct device (safe version)"""
         if not self.pipe:
-            print("⚠️ Model not loaded")
+            logger.warning("⚠️ Model not loaded")
             return False
             
-        print(f"🔍 Safe device verification for {self.device}:")
+        logger.info(f"🔍 Safe device verification for {self.device}:")
         
         try:
             # Check main pipeline device
             if hasattr(self.pipe, 'device'):
                 main_device = str(self.pipe.device)
-                print(f"   Pipeline device: {main_device}")
+                logger.info(f"   Pipeline device: {main_device}")
             
             # Check components safely
             components = ['unet', 'vae', 'text_encoder']
@@ -374,35 +375,35 @@ class QwenImageGenerator:
                         except Exception:
                             param_count = 0
                         
-                        print(f"   {comp_name.upper()}: {comp_device} ({param_count:,} params)")
+                        logger.info(f"   {comp_name.upper()}: {comp_device} ({param_count:,} params)")
                         
                         if comp_device != self.device and comp_device != "unknown":
                             all_correct = False
                             
                     except Exception as comp_error:
-                        print(f"   {comp_name.upper()}: error checking device ({comp_error})")
+                        logger.info(f"   {comp_name.upper()}: error checking device ({comp_error})")
                         all_correct = False
             
             # Check scheduler
             if hasattr(self.pipe, 'scheduler') and self.pipe.scheduler is not None:
-                print(f"   SCHEDULER: present ({type(self.pipe.scheduler).__name__})")
+                logger.info(f"   SCHEDULER: present ({type(self.pipe.scheduler).__name__})")
             
             # Summary
             if all_correct:
-                print(f"✅ All components verified on {self.device}")
+                logger.info(f"✅ All components verified on {self.device}")
                 return True
             else:
-                print("⚠️ Some components may need device adjustment")
+                logger.warning("⚠️ Some components may need device adjustment")
                 return False
                 
         except Exception as e:
-            print(f"❌ Device verification failed: {e}")
+            logger.error(f"❌ Device verification failed: {e}")
             return False
     
     def _force_device_consistency(self):
         """Force all components to the target device with safe methods"""
         try:
-            print(f"🔧 Forcing device consistency to {self.device}...")
+            logger.info(f"🔧 Forcing device consistency to {self.device}...")
             
             # Safe device movement - use PyTorch's built-in methods only
             components = ['unet', 'vae', 'text_encoder']
@@ -418,35 +419,35 @@ class QwenImageGenerator:
                         
                         # Count parameters for reporting
                         param_count = sum(p.numel() for p in component.parameters())
-                        print(f"✅ {comp_name}: moved to {self.device} ({param_count:,} parameters)")
+                        logger.info(f"✅ {comp_name}: moved to {self.device} ({param_count:,} parameters)")
                         
                     except Exception as comp_error:
-                        print(f"⚠️ Could not move {comp_name}: {comp_error}")
+                        logger.warning(f"⚠️ Could not move {comp_name}: {comp_error}")
             
             # Handle scheduler (no device movement needed for most schedulers)
             if hasattr(self.pipe, 'scheduler') and self.pipe.scheduler is not None:
-                print(f"✅ scheduler: present ({type(self.pipe.scheduler).__name__})")
+                logger.info(f"✅ scheduler: present ({type(self.pipe.scheduler).__name__})")
             
             # Move pipeline itself to device
             try:
                 self.pipe = self.pipe.to(self.device)
-                print(f"✅ Pipeline moved to {self.device}")
+                logger.info(f"✅ Pipeline moved to {self.device}")
             except Exception as pipe_error:
-                print(f"⚠️ Pipeline device move warning: {pipe_error}")
+                logger.warning(f"⚠️ Pipeline device move warning: {pipe_error}")
             
             # Clear cache
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
                 
         except Exception as e:
-            print(f"❌ Failed to force device consistency: {e}")
+            logger.error(f"❌ Failed to force device consistency: {e}")
             # Emergency fallback: minimal device move
             try:
-                print("🚨 Attempting minimal device move...")
+                logger.info("🚨 Attempting minimal device move...")
                 self.pipe = self.pipe.to(self.device)
-                print("✅ Minimal move completed")
+                logger.info("✅ Minimal move completed")
             except Exception as e2:
-                print(f"❌ Minimal move also failed: {e2}")
+                logger.error(f"❌ Minimal move also failed: {e2}")
 
     def enhance_prompt(self, prompt: str, language: str = "en") -> str:
         """Enhance prompt with quality keywords"""
@@ -489,12 +490,12 @@ class QwenImageGenerator:
             else:
                 generator = torch.Generator().manual_seed(seed)
             
-            print(f"Generating image with prompt: {enhanced_prompt[:100]}...")
-            print(f"Settings: {width}x{height}, steps: {num_inference_steps}, CFG: {cfg_scale}, seed: {seed}")
-            print(f"Device: {self.device}, Generator device: {generator.device if hasattr(generator, 'device') else 'cpu'}")
+            logger.info(f"Generating image with prompt: {enhanced_prompt[:100]}...")
+            logger.info(f"Settings: {width}x{height}, steps: {num_inference_steps}, CFG: {cfg_scale}, seed: {seed}")
+            logger.info(f"Device: {self.device}, Generator device: {generator.device if hasattr(generator, 'device') else 'cpu'}")
             
             # SAFE: Pre-generation device check
-            print("🔍 Critical pre-generation device check...")
+            logger.info("🔍 Critical pre-generation device check...")
             
             # Light device consistency check - no aggressive moves
             try:
@@ -517,22 +518,22 @@ class QwenImageGenerator:
                                     comp_device = str(next(component.parameters()).device)
                                 
                                 if comp_device != self.device:
-                                    print(f"⚠️ {comp_name} on {comp_device}, expected {self.device}")
+                                    logger.warning(f"⚠️ {comp_name} on {comp_device}, expected {self.device}")
                                     device_issues = True
                                 else:
-                                    print(f"✅ {comp_name} correctly on {self.device}")
+                                    logger.info(f"✅ {comp_name} correctly on {self.device}")
                             except Exception:
-                                print(f"⚠️ Could not verify {comp_name} device")
+                                logger.warning(f"⚠️ Could not verify {comp_name} device")
                 
                 # Only force consistency if issues detected
                 if device_issues:
-                    print("🛠️ Light device consistency adjustment...")
+                    logger.info("🛠️ Light device consistency adjustment...")
                     self._force_device_consistency()
                 else:
-                    print("✅ All components already on correct device")
+                    logger.info("✅ All components already on correct device")
                     
             except Exception as check_error:
-                print(f"⚠️ Device check failed: {check_error}")
+                logger.warning(f"⚠️ Device check failed: {check_error}")
             
             # Ensure we're using the correct device context with proper error handling
             device_context = torch.cuda.device(self.device) if torch.cuda.is_available() else torch.no_grad()
@@ -543,7 +544,7 @@ class QwenImageGenerator:
                     if torch.cuda.is_available():
                         torch.cuda.empty_cache()
                         torch.cuda.synchronize()
-                        print(f"🧹 CUDA synchronized, available memory: {torch.cuda.get_device_properties(0).total_memory - torch.cuda.memory_allocated():.1e} bytes")
+                        logger.info(f"🧹 CUDA synchronized, available memory: {torch.cuda.get_device_properties(0).total_memory - torch.cuda.memory_allocated():.1e} bytes")
                     
                     # For Qwen-Image, we need to use the correct parameter name
                     generation_params = {
@@ -566,17 +567,17 @@ class QwenImageGenerator:
                     
                     # NO aggressive device moves right before generation
                     # Just verify and proceed - the model should already be properly loaded
-                    print(f"✅ Starting generation on {self.device}")
+                    logger.info(f"✅ Starting generation on {self.device}")
                     
-                    print("🎨 Starting generation with comprehensive device safety...")
+                    logger.info("🎨 Starting generation with comprehensive device safety...")
                     
                     # Generation with additional error handling
                     try:
                         result = self.pipe(**generation_params)
                     except RuntimeError as runtime_error:
                         if "Expected all tensors to be on the same device" in str(runtime_error):
-                            print(f"❌ Device error during generation: {runtime_error}")
-                            print("🔄 Attempting CPU fallback generation...")
+                            logger.error(f"❌ Device error during generation: {runtime_error}")
+                            logger.info("🔄 Attempting CPU fallback generation...")
                             
                             # Emergency CPU fallback
                             try:
@@ -594,10 +595,10 @@ class QwenImageGenerator:
                                     generator=cpu_generator
                                 )
                                 
-                                print("✅ CPU fallback generation successful")
+                                logger.info("✅ CPU fallback generation successful")
                                 
                             except Exception as cpu_error:
-                                print(f"❌ CPU fallback also failed: {cpu_error}")
+                                logger.error(f"❌ CPU fallback also failed: {cpu_error}")
                                 raise runtime_error  # Re-raise original error
                         else:
                             raise  # Re-raise non-device errors
@@ -637,7 +638,7 @@ class QwenImageGenerator:
             
         except Exception as e:
             error_msg = f"❌ Error generating image: {str(e)}"
-            print(error_msg)
+            logger.info(error_msg)
             return None, error_msg
     
     def generate_img2img(self, prompt: str, init_image: PIL.Image.Image, strength: float = 0.8,
@@ -684,9 +685,9 @@ class QwenImageGenerator:
             # Resize init image to target dimensions
             init_image = init_image.resize((width, height), PIL.Image.Resampling.LANCZOS)
             
-            print("Generating image-to-image with Qwen-Image-Edit...")
-            print(f"Prompt: {enhanced_prompt[:100]}...")
-            print(f"Settings: {width}x{height}, steps: {num_inference_steps}, CFG: {cfg_scale}, seed: {seed}")
+            logger.info("Generating image-to-image with Qwen-Image-Edit...")
+            logger.info(f"Prompt: {enhanced_prompt[:100]}...")
+            logger.info(f"Settings: {width}x{height}, steps: {num_inference_steps}, CFG: {cfg_scale}, seed: {seed}")
             
             with torch.no_grad():
                 # Use Qwen-Image-Edit pipeline
@@ -733,7 +734,7 @@ class QwenImageGenerator:
             
         except Exception as e:
             error_msg = f"❌ Error in img2img generation: {str(e)}"
-            print(error_msg)
+            logger.info(error_msg)
             return None, error_msg
     
     def generate_inpaint(self, prompt: str, init_image: PIL.Image.Image, mask_image: PIL.Image.Image,
@@ -784,9 +785,9 @@ class QwenImageGenerator:
             # For Qwen-Image-Edit, we'll create a composite prompt that describes the inpainting task
             mask_prompt = f"In the masked area: {enhanced_prompt}"
             
-            print("Generating inpaint with Qwen-Image-Edit...")
-            print(f"Prompt: {mask_prompt[:100]}...")
-            print(f"Settings: {width}x{height}, steps: {num_inference_steps}, CFG: {cfg_scale}, seed: {seed}")
+            logger.info("Generating inpaint with Qwen-Image-Edit...")
+            logger.info(f"Prompt: {mask_prompt[:100]}...")
+            logger.info(f"Settings: {width}x{height}, steps: {num_inference_steps}, CFG: {cfg_scale}, seed: {seed}")
             
             with torch.no_grad():
                 # Use Qwen-Image-Edit pipeline for inpainting-style editing
@@ -834,7 +835,7 @@ class QwenImageGenerator:
             
         except Exception as e:
             error_msg = f"❌ Error in inpainting generation: {str(e)}"
-            print(error_msg)
+            logger.info(error_msg)
             return None, error_msg
     
     def super_resolution(self, image: PIL.Image.Image, scale_factor: int = 2) -> Tuple[Optional[PIL.Image.Image], str]:
@@ -874,5 +875,5 @@ class QwenImageGenerator:
             
         except Exception as e:
             error_msg = f"❌ Error in super resolution: {str(e)}"
-            print(error_msg)
+            logger.info(error_msg)
             return None, error_msg
