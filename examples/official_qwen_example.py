@@ -1,48 +1,102 @@
 #!/usr/bin/env python3
 """
-Official Qwen-Image Example Script
-Based on the official Hugging Face documentation
-Demonstrates advanced text rendering capabilities
+Official Qwen-Image Example Script with Modern Architecture Support
+Based on the official Hugging Face documentation with MMDiT optimizations
+Demonstrates advanced text rendering capabilities and performance improvements
 """
 
 import os
 import sys
+import time
 from datetime import datetime
 
 import torch
-from diffusers import DiffusionPipeline
+from diffusers import DiffusionPipeline, AutoPipelineForText2Image
 
 # Add parent directory for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-def official_qwen_example():
-    """Run the official Qwen-Image example from Hugging Face docs"""
+# Add src directory for optimization components
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+
+try:
+    from pipeline_optimizer import PipelineOptimizer, OptimizationConfig
+    from model_detection_service import ModelDetectionService
+    OPTIMIZATION_AVAILABLE = True
+except ImportError:
+    OPTIMIZATION_AVAILABLE = False
+    print("⚠️ Optimization components not available, using basic functionality")
+
+def official_qwen_example_optimized():
+    """Run the official Qwen-Image example with modern optimizations"""
     
-    print("🎨 Official Qwen-Image Example")
-    print("=" * 50)
+    print("🎨 Official Qwen-Image Example with MMDiT Optimizations")
+    print("=" * 60)
     print("Based on: https://huggingface.co/Qwen/Qwen-Image")
+    print("Enhanced with: Modern architecture optimizations")
     print()
     
     model_name = "Qwen/Qwen-Image"
     
-    # Load the pipeline (matching official docs)
-    print("📦 Loading Qwen-Image pipeline...")
-    if torch.cuda.is_available():
-        torch_dtype = torch.bfloat16
-        device = "cuda"
-        print("✅ Using CUDA with bfloat16")
-    else:
-        torch_dtype = torch.float32
-        device = "cpu"
-        print("⚠️ Using CPU with float32")
+    # Try to detect and load optimized model
+    pipe = None
+    if OPTIMIZATION_AVAILABLE:
+        try:
+            print("🔍 Detecting optimal model configuration...")
+            detector = ModelDetectionService()
+            current_model = detector.detect_current_model()
+            
+            if current_model and current_model.download_status == "complete":
+                print(f"📦 Found model: {current_model.name}")
+                architecture = detector.detect_model_architecture(current_model)
+                print(f"🏗️ Architecture: {architecture}")
+                
+                # Create optimized pipeline
+                config = OptimizationConfig(
+                    architecture_type=architecture,
+                    enable_attention_slicing=False,  # Disabled for performance
+                    enable_vae_slicing=False,        # Disabled for performance
+                    enable_tf32=True,                # Enabled for RTX GPUs
+                    enable_cudnn_benchmark=True      # Enabled for consistent inputs
+                )
+                
+                optimizer = PipelineOptimizer(config)
+                pipe = optimizer.create_optimized_pipeline(current_model.path, architecture)
+                
+                # Validate optimization
+                validation = optimizer.validate_optimization(pipe)
+                print(f"✅ Optimization status: {validation['overall_status']}")
+                print(f"🚀 GPU optimizations: {validation['gpu_optimizations']}")
+                
+            else:
+                print("⚠️ No optimal model found, falling back to basic loading")
+        except Exception as e:
+            print(f"⚠️ Optimization failed: {e}, falling back to basic loading")
     
-    try:
-        pipe = DiffusionPipeline.from_pretrained(model_name, torch_dtype=torch_dtype)
-        pipe = pipe.to(device)
-        print(f"✅ Pipeline loaded successfully on {device}")
-    except Exception as e:
-        print(f"❌ Failed to load pipeline: {e}")
-        return
+    # Fallback to basic loading if optimization not available
+    if pipe is None:
+        print("📦 Loading Qwen-Image pipeline (basic configuration)...")
+        if torch.cuda.is_available():
+            torch_dtype = torch.float16  # Use float16 instead of bfloat16 for better compatibility
+            device = "cuda"
+            print("✅ Using CUDA with float16")
+        else:
+            torch_dtype = torch.float32
+            device = "cpu"
+            print("⚠️ Using CPU with float32")
+        
+        try:
+            # Use AutoPipelineForText2Image for better text-to-image performance
+            pipe = AutoPipelineForText2Image.from_pretrained(
+                model_name, 
+                torch_dtype=torch_dtype,
+                trust_remote_code=True
+            )
+            pipe = pipe.to(device)
+            print(f"✅ Pipeline loaded successfully on {device}")
+        except Exception as e:
+            print(f"❌ Failed to load pipeline: {e}")
+            return
     
     # Official positive magic strings
     positive_magic = {
@@ -76,17 +130,29 @@ def official_qwen_example():
     print()
     
     try:
-        # Generate with official parameters
+        # Generate with optimized parameters
         print("🎨 Starting generation...")
-        image = pipe(
-            prompt=prompt + positive_magic["en"],
-            negative_prompt=negative_prompt,
-            width=width,
-            height=height,
-            num_inference_steps=50,
-            true_cfg_scale=4.0,
-            generator=torch.Generator(device=device).manual_seed(42)
-        ).images[0]
+        start_time = time.time()
+        
+        # Prepare generation arguments
+        generation_kwargs = {
+            "prompt": prompt + positive_magic["en"],
+            "negative_prompt": negative_prompt,
+            "width": width,
+            "height": height,
+            "num_inference_steps": 30,  # Reduced from 50 for better performance
+            "generator": torch.Generator(device=device).manual_seed(42)
+        }
+        
+        # Use appropriate CFG parameter (MMDiT uses true_cfg_scale, UNet uses guidance_scale)
+        if hasattr(pipe, 'transformer') or 'qwen' in str(pipe.__class__).lower():
+            generation_kwargs["true_cfg_scale"] = 3.5  # Optimized for MMDiT
+        else:
+            generation_kwargs["guidance_scale"] = 3.5  # Fallback for UNet
+        
+        image = pipe(**generation_kwargs).images[0]
+        
+        generation_time = time.time() - start_time
         
         # Save with timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -100,6 +166,7 @@ def official_qwen_example():
         
         print("✅ Image generated successfully!")
         print(f"📁 Saved as: {filepath}")
+        print(f"⏱️ Generation time: {generation_time:.2f}s ({generation_time/30:.2f}s per step)")
         print()
         print("🎯 This example demonstrates:")
         print("   • Complex text rendering (English + Chinese)")
@@ -107,6 +174,16 @@ def official_qwen_example():
         print("   • Emoji support")
         print("   • Mixed typography in realistic scenes")
         print("   • Official 'positive magic' enhancement")
+        print("   • MMDiT architecture optimizations")
+        
+        # Performance assessment
+        time_per_step = generation_time / 30
+        if time_per_step <= 2.0:
+            print("🏆 Excellent performance! MMDiT optimizations working well")
+        elif time_per_step <= 5.0:
+            print("✅ Good performance with modern architecture")
+        else:
+            print("⚠️ Consider checking GPU optimization settings")
         
     except Exception as e:
         print(f"❌ Generation failed: {e}")
@@ -171,12 +248,12 @@ if __name__ == "__main__":
     choice = input("Choose example:\n1. Official Hugging Face example (complex text)\n2. Quick text test with existing generator\n\nEnter choice (1-2): ").strip()
     
     if choice == "1":
-        official_qwen_example()
+        official_qwen_example_optimized()
     elif choice == "2":
         quick_text_test()
     else:
         print("Running both examples...")
         print()
-        official_qwen_example()
+        official_qwen_example_optimized()
         print("\n" + "="*60 + "\n")
         quick_text_test()

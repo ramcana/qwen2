@@ -17,7 +17,7 @@ source scripts/activate.sh
 # Recommended: Safe start (prevents segfaults)
 ./scripts/safe_restart.sh
 
-# Alternative: Full diagnostic start  
+# Alternative: Full diagnostic start
 ./scripts/restart_ui.sh
 
 # Just activate environment
@@ -42,22 +42,22 @@ python tools/emergency_device_fix.py
 
 ## 📁 Important Directories
 
-| Directory | Purpose | Key Files |
-|-----------|---------|-----------|
-| `src/` | Main application | `qwen_image_ui.py`, `qwen_generator.py` |
-| `scripts/` | All automation | `safe_restart.sh`, `setup.sh` |
-| `docs/` | Documentation | Device fixes, UI guides |
-| `tools/` | Diagnostics | `test_device.py` |
-| `reports/` | Generated logs | Error reports |
+| Directory  | Purpose          | Key Files                               |
+| ---------- | ---------------- | --------------------------------------- |
+| `src/`     | Main application | `qwen_image_ui.py`, `qwen_generator.py` |
+| `scripts/` | All automation   | `safe_restart.sh`, `setup.sh`           |
+| `docs/`    | Documentation    | Device fixes, UI guides                 |
+| `tools/`   | Diagnostics      | `test_device.py`                        |
+| `reports/` | Generated logs   | Error reports                           |
 
 ## 🔧 Common Issues & Solutions
 
-| Problem | Solution |
-|---------|----------|
-| Segmentation fault | Use `./scripts/safe_restart.sh` |
+| Problem            | Solution                          |
+| ------------------ | --------------------------------- |
+| Segmentation fault | Use `./scripts/safe_restart.sh`   |
 | CUDA device errors | Run `python tools/test_device.py` |
-| UI won't load | Check `docs/UI_ACCESS_GUIDE.md` |
-| Import errors | Run `source scripts/activate.sh` |
+| UI won't load      | Check `docs/UI_ACCESS_GUIDE.md`   |
+| Import errors      | Run `source scripts/activate.sh`  |
 
 ## 🌐 Access Points
 

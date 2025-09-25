@@ -1,25 +1,31 @@
-import { Settings, Shuffle, Wand2 } from 'lucide-react';
+import { Settings, Shuffle, Wand2, Image as ImageIcon, Clock, Zap } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
 import { useMutation, useQuery } from 'react-query';
-import { generateTextToImage, getAspectRatios } from '../services/api';
+import { generateTextToImage, generateImageToImage, getAspectRatios } from '../services/api';
 import { GenerationRequest } from '../types/api';
+import ImageUpload from './ImageUpload';
 
 interface GenerationFormData extends Omit<GenerationRequest, 'seed'> {
   seed: string; // Form uses string, convert to number
 }
 
 const GenerationPanel: React.FC = () => {
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(true); // Show advanced by default
   const [lastGeneration, setLastGeneration] = useState<any>(null);
+  const [generationMode, setGenerationMode] = useState<'text-to-image' | 'image-to-image'>('text-to-image');
+  const [uploadedImage, setUploadedImage] = useState<{ file: File; previewUrl: string } | null>(null);
+  const [strength, setStrength] = useState(0.7);
+  const [generationStartTime, setGenerationStartTime] = useState<number | null>(null);
+  const [estimatedTimeRemaining, setEstimatedTimeRemaining] = useState<number | null>(null);
 
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<GenerationFormData>({
     defaultValues: {
       prompt: '',
       negative_prompt: '',
       width: 1664,
-      height: 928,
+      height: 960,
       num_inference_steps: 50,
       cfg_scale: 4.0,
       seed: '-1',
@@ -29,39 +35,93 @@ const GenerationPanel: React.FC = () => {
     }
   });
 
-  const { data: aspectRatios } = useQuery('aspect-ratios', getAspectRatios);
+  const { data: aspectRatios } = useQuery('aspect-ratios', getAspectRatios, {
+    retry: 3,
+    retryDelay: 1000,
+    staleTime: 300000, // 5 minutes
+    onError: (error) => {
+      console.warn('Failed to load aspect ratios:', error);
+    }
+  });
 
   const selectedAspectRatio = watch('aspect_ratio');
 
   // Update dimensions when aspect ratio changes
   useEffect(() => {
-    if (aspectRatios && selectedAspectRatio && aspectRatios.ratios[selectedAspectRatio]) {
+    if (aspectRatios?.ratios && selectedAspectRatio && aspectRatios.ratios[selectedAspectRatio]) {
       const [width, height] = aspectRatios.ratios[selectedAspectRatio];
       setValue('width', width);
       setValue('height', height);
     }
   }, [selectedAspectRatio, aspectRatios, setValue]);
 
-  const generateMutation = useMutation(generateTextToImage, {
-    onSuccess: (data) => {
-      if (data.success) {
-        setLastGeneration(data);
-        toast.success(`Image generated in ${data.generation_time?.toFixed(1)}s`);
+  // Timer state for real-time updates
+  const [currentTime, setCurrentTime] = useState(Date.now());
+
+  const generateMutation = useMutation(
+    async (data: GenerationFormData) => {
+      // Track generation start time
+      setGenerationStartTime(Date.now());
+      setEstimatedTimeRemaining(data.num_inference_steps * 2); // Rough estimate: 2 seconds per step
+      
+      const request: GenerationRequest = {
+        ...data,
+        seed: data.seed === '-1' ? -1 : parseInt(data.seed) || -1
+      };
+
+      if (generationMode === 'image-to-image') {
+        if (!uploadedImage) {
+          throw new Error('Please upload an image for image-to-image generation');
+        }
+        
+        // For now, we'll use the preview URL as the image path
+        // In a real implementation, you'd upload the image to the server first
+        const img2imgRequest = {
+          ...request,
+          init_image_path: uploadedImage.previewUrl,
+          strength: strength
+        };
+        
+        return generateImageToImage(img2imgRequest);
       } else {
-        toast.error(data.message);
+        return generateTextToImage(request);
       }
     },
-    onError: (error: any) => {
-      toast.error(`Generation failed: ${error.response?.data?.detail || error.message}`);
+    {
+      onSuccess: (data) => {
+        setGenerationStartTime(null);
+        setEstimatedTimeRemaining(null);
+        
+        if (data.success) {
+          setLastGeneration(data);
+          toast.success(`Image generated in ${data.generation_time?.toFixed(1)}s`);
+        } else {
+          toast.error(data.message);
+        }
+      },
+      onError: (error: any) => {
+        setGenerationStartTime(null);
+        setEstimatedTimeRemaining(null);
+        toast.error(`Generation failed: ${error.response?.data?.detail || error.message}`);
+      }
     }
-  });
+  );
+
+  // Update timer every second during generation
+  useEffect(() => {
+    let interval: any;
+    if (generateMutation.isLoading && generationStartTime) {
+      interval = setInterval(() => {
+        setCurrentTime(Date.now());
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [generateMutation.isLoading, generationStartTime]);
 
   const onSubmit = (data: GenerationFormData) => {
-    const request: GenerationRequest = {
-      ...data,
-      seed: data.seed === '-1' ? -1 : parseInt(data.seed) || -1
-    };
-    generateMutation.mutate(request);
+    generateMutation.mutate(data);
   };
 
   const randomizeSeed = () => {
@@ -86,7 +146,67 @@ const GenerationPanel: React.FC = () => {
       <div className="card p-6">
         <h2 className="text-xl font-bold text-gray-900 mb-4">Generate Image</h2>
         
+        {/* Generation Mode Toggle */}
+        <div className="flex space-x-2 mb-4">
+          <button
+            type="button"
+            onClick={() => setGenerationMode('text-to-image')}
+            className={`flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              generationMode === 'text-to-image'
+                ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            <Wand2 className="w-4 h-4 mr-2" />
+            Text to Image
+          </button>
+          <button
+            type="button"
+            onClick={() => setGenerationMode('image-to-image')}
+            className={`flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              generationMode === 'image-to-image'
+                ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            <ImageIcon className="w-4 h-4 mr-2" />
+            Image to Image
+          </button>
+        </div>
+
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {/* Image Upload for img2img */}
+          {generationMode === 'image-to-image' && (
+            <div>
+              <ImageUpload
+                onImageUpload={(file, previewUrl) => setUploadedImage({ file, previewUrl })}
+                currentImage={uploadedImage?.previewUrl}
+                onClearImage={() => setUploadedImage(null)}
+                disabled={generateMutation.isLoading}
+              />
+              
+              {/* Strength Slider */}
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Strength: {strength.toFixed(1)} (how much to change the image)
+                </label>
+                <input
+                  type="range"
+                  min="0.1"
+                  max="1.0"
+                  step="0.1"
+                  value={strength}
+                  onChange={(e) => setStrength(parseFloat(e.target.value))}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-xs text-gray-500 mt-1">
+                  <span>Subtle changes</span>
+                  <span>Major changes</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Prompt */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -131,7 +251,7 @@ const GenerationPanel: React.FC = () => {
               Aspect Ratio
             </label>
             <select {...register('aspect_ratio')} className="input">
-              {aspectRatios && Object.keys(aspectRatios.ratios).map(ratio => (
+              {aspectRatios?.ratios && Object.keys(aspectRatios.ratios).map(ratio => (
                 <option key={ratio} value={ratio}>
                   {ratio.replace(':', ':')} ({aspectRatios.ratios[ratio][0]}×{aspectRatios.ratios[ratio][1]})
                 </option>
@@ -284,6 +404,54 @@ const GenerationPanel: React.FC = () => {
             )}
           </button>
         </form>
+
+        {/* Generation Progress Display */}
+        {generateMutation.isLoading && (
+          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center">
+                <Wand2 className="w-5 h-5 text-blue-600 animate-spin mr-2" />
+                <span className="font-medium text-blue-900">Generating Image...</span>
+              </div>
+              {generationStartTime && (
+                <div className="flex items-center text-sm text-blue-700">
+                  <Clock className="w-4 h-4 mr-1" />
+                  {Math.floor((currentTime - generationStartTime) / 1000)}s
+                </div>
+              )}
+            </div>
+            
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm text-blue-700">
+                <span>Processing {watch('num_inference_steps')} inference steps</span>
+                {estimatedTimeRemaining && generationStartTime && (
+                  <span>~{Math.max(0, estimatedTimeRemaining - Math.floor((currentTime - generationStartTime) / 1000))}s remaining</span>
+                )}
+              </div>
+              
+              <div className="w-full bg-blue-200 rounded-full h-2">
+                <div 
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-1000 ease-out"
+                  style={{ 
+                    width: generationStartTime 
+                      ? `${Math.min(100, ((currentTime - generationStartTime) / 1000 / (estimatedTimeRemaining || 60)) * 100)}%`
+                      : '0%'
+                  }}
+                />
+              </div>
+              
+              <div className="flex items-center justify-between text-xs text-blue-600">
+                <div className="flex items-center">
+                  <Zap className="w-3 h-3 mr-1" />
+                  <span>{watch('width')}×{watch('height')} • CFG {watch('cfg_scale')}</span>
+                </div>
+                <span className="font-mono">
+                  {generationMode === 'image-to-image' ? 'img2img' : 'txt2img'}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Example Prompts */}

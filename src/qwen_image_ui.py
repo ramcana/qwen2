@@ -160,120 +160,409 @@ def create_interface():
                 scale=2
             )
         
-        with gr.Row():
-            # Left Panel - Controls
-            with gr.Column(scale=1):
-                
-                # Prompt inputs
-                with gr.Group():
-                    gr.Markdown("### 📝 Prompt Settings")
-                    prompt_input = gr.Textbox(
-                        label="Prompt",
-                        placeholder="A coffee shop entrance with a chalkboard sign reading 'Qwen Coffee ☕ $2 per cup'...",
-                        lines=4,
-                        max_lines=8
-                    )
+        # Tabs for different generation modes
+        with gr.Tabs():
+            # Text-to-Image Tab
+            with gr.TabItem("🎨 Text-to-Image"):
+                with gr.Row():
+                    # Left Panel - Controls
+                    with gr.Column(scale=1):
+                        
+                        # Prompt inputs
+                        with gr.Group():
+                            gr.Markdown("### 📝 Prompt Settings")
+                            prompt_input = gr.Textbox(
+                                label="Prompt",
+                                placeholder="A coffee shop entrance with a chalkboard sign reading 'Qwen Coffee ☕ $2 per cup'...",
+                                lines=4,
+                                max_lines=8
+                            )
+                            
+                            negative_prompt_input = gr.Textbox(
+                                label="Negative Prompt (optional)",
+                                placeholder="blurry, low quality, distorted...",
+                                lines=2
+                            )
+                            
+                            language_choice = gr.Radio(
+                                choices=["en", "zh"], 
+                                value="en", 
+                                label="Language",
+                                info="Choose prompt language for better enhancement"
+                            )
+                            
+                            enhance_prompt_toggle = gr.Checkbox(
+                                value=True, 
+                                label="Enhance Prompt",
+                                info="Add quality keywords automatically"
+                            )
+                        
+                        # Image dimensions
+                        with gr.Group():
+                            gr.Markdown("### 📐 Image Dimensions")
+                            aspect_ratio_dropdown = gr.Dropdown(
+                                choices=list(UI_ASPECT_RATIOS.keys()),
+                                value="Landscape (16:9)",
+                                label="Aspect Ratio Preset"
+                            )
+                            
+                            with gr.Row():
+                                width_slider = gr.Slider(
+                                    minimum=512, maximum=2048, step=64, value=1664,
+                                    label="Width"
+                                )
+                                height_slider = gr.Slider(
+                                    minimum=512, maximum=2048, step=64, value=928,
+                                    label="Height"
+                                )
+                        
+                        # Generation settings
+                        with gr.Group():
+                            gr.Markdown("### ⚙️ Generation Settings")
+                            steps_slider = gr.Slider(
+                                minimum=10, maximum=100, step=5, value=50,
+                                label="Inference Steps",
+                                info="More steps = higher quality (slower)"
+                            )
+                            
+                            cfg_slider = gr.Slider(
+                                minimum=1.0, maximum=20.0, step=0.5, value=4.0,
+                                label="CFG Scale",
+                                info="How closely to follow the prompt"
+                            )
+                            
+                            seed_input = gr.Number(
+                                value=-1, 
+                                label="Seed (-1 for random)",
+                                precision=0,
+                                info="Use same seed for reproducible results"
+                            )
                     
-                    negative_prompt_input = gr.Textbox(
-                        label="Negative Prompt (optional)",
-                        placeholder="blurry, low quality, distorted...",
-                        lines=2
-                    )
-                    
-                    language_choice = gr.Radio(
-                        choices=["en", "zh"], 
-                        value="en", 
-                        label="Language",
-                        info="Choose prompt language for better enhancement"
-                    )
-                    
-                    enhance_prompt_toggle = gr.Checkbox(
-                        value=True, 
-                        label="Enhance Prompt",
-                        info="Add quality keywords automatically"
-                    )
-                
-                # Image dimensions
-                with gr.Group():
-                    gr.Markdown("### 📐 Image Dimensions")
-                    aspect_ratio_dropdown = gr.Dropdown(
-                        choices=list(UI_ASPECT_RATIOS.keys()),
-                        value="Landscape (16:9)",
-                        label="Aspect Ratio Preset"
-                    )
-                    
-                    with gr.Row():
-                        width_slider = gr.Slider(
-                            minimum=512, maximum=2048, step=64, value=1664,
-                            label="Width"
+                    # Right Panel - Generation and Results
+                    with gr.Column(scale=2):
+                        
+                        # Generate button
+                        generate_btn = gr.Button(
+                            "🎨 Generate Image", 
+                            variant="primary", 
+                            size="lg",
+                            elem_classes=["generate-btn"]
                         )
-                        height_slider = gr.Slider(
-                            minimum=512, maximum=2048, step=64, value=928,
-                            label="Height"
+                        
+                        # Results
+                        result_image = gr.Image(
+                            label="Generated Image",
+                            height=600,
+                            show_download_button=True,
+                            show_share_button=False
                         )
-                
-                # Generation settings
-                with gr.Group():
-                    gr.Markdown("### ⚙️ Generation Settings")
-                    steps_slider = gr.Slider(
-                        minimum=10, maximum=100, step=5, value=50,
-                        label="Inference Steps",
-                        info="More steps = higher quality (slower)"
-                    )
-                    
-                    cfg_slider = gr.Slider(
-                        minimum=1.0, maximum=20.0, step=0.5, value=4.0,
-                        label="CFG Scale",
-                        info="How closely to follow the prompt"
-                    )
-                    
-                    seed_input = gr.Number(
-                        value=-1, 
-                        label="Seed (-1 for random)",
-                        precision=0,
-                        info="Use same seed for reproducible results"
-                    )
+                        
+                        result_message = gr.Textbox(
+                            label="Generation Info",
+                            lines=3,
+                            max_lines=5,
+                            interactive=False
+                        )
             
-            # Right Panel - Generation and Results
-            with gr.Column(scale=2):
-                
-                # Generate button
-                generate_btn = gr.Button(
-                    "🎨 Generate Image", 
-                    variant="primary", 
-                    size="lg",
-                    elem_classes=["generate-btn"]
-                )
-                
-                # Results
-                result_image = gr.Image(
-                    label="Generated Image",
-                    height=600,
-                    show_download_button=True,
-                    show_share_button=False
-                )
-                
-                result_message = gr.Textbox(
-                    label="Generation Info",
-                    lines=3,
-                    max_lines=5,
-                    interactive=False
-                )
+            # Image-to-Image Tab
+            with gr.TabItem("🖼️ Image-to-Image"):
+                with gr.Row():
+                    # Left Panel - Controls
+                    with gr.Column(scale=1):
+                        
+                        # Input image
+                        with gr.Group():
+                            gr.Markdown("### 🖼️ Input Image")
+                            img2img_input = gr.Image(
+                                label="Upload Input Image",
+                                type="pil",
+                                height=300
+                            )
+                            
+                            strength_slider = gr.Slider(
+                                minimum=0.1, maximum=1.0, step=0.05, value=0.7,
+                                label="Transformation Strength",
+                                info="Higher = more changes to original image"
+                            )
+                        
+                        # Prompt inputs
+                        with gr.Group():
+                            gr.Markdown("### 📝 Prompt Settings")
+                            img2img_prompt = gr.Textbox(
+                                label="Prompt",
+                                placeholder="Transform this image into a cyberpunk style...",
+                                lines=4,
+                                max_lines=8
+                            )
+                            
+                            img2img_negative = gr.Textbox(
+                                label="Negative Prompt (optional)",
+                                placeholder="blurry, low quality, distorted...",
+                                lines=2
+                            )
+                            
+                            img2img_language = gr.Radio(
+                                choices=["en", "zh"], 
+                                value="en", 
+                                label="Language"
+                            )
+                            
+                            img2img_enhance = gr.Checkbox(
+                                value=True, 
+                                label="Enhance Prompt"
+                            )
+                        
+                        # Dimensions and settings
+                        with gr.Group():
+                            gr.Markdown("### 📐 Image Dimensions")
+                            with gr.Row():
+                                img2img_width = gr.Slider(
+                                    minimum=512, maximum=2048, step=64, value=1024,
+                                    label="Width"
+                                )
+                                img2img_height = gr.Slider(
+                                    minimum=512, maximum=2048, step=64, value=1024,
+                                    label="Height"
+                                )
+                        
+                        with gr.Group():
+                            gr.Markdown("### ⚙️ Generation Settings")
+                            img2img_steps = gr.Slider(
+                                minimum=10, maximum=100, step=5, value=30,
+                                label="Inference Steps"
+                            )
+                            
+                            img2img_cfg = gr.Slider(
+                                minimum=1.0, maximum=20.0, step=0.5, value=4.0,
+                                label="CFG Scale"
+                            )
+                            
+                            img2img_seed = gr.Number(
+                                value=-1, 
+                                label="Seed (-1 for random)",
+                                precision=0
+                            )
+                    
+                    # Right Panel - Generation and Results
+                    with gr.Column(scale=2):
+                        
+                        # Generate button
+                        img2img_generate_btn = gr.Button(
+                            "🖼️ Transform Image", 
+                            variant="primary", 
+                            size="lg"
+                        )
+                        
+                        # Results
+                        img2img_result = gr.Image(
+                            label="Transformed Image",
+                            height=600,
+                            show_download_button=True,
+                            show_share_button=False
+                        )
+                        
+                        img2img_message = gr.Textbox(
+                            label="Generation Info",
+                            lines=3,
+                            max_lines=5,
+                            interactive=False
+                        )
+            
+            # Inpainting Tab
+            with gr.TabItem("🎭 Inpainting"):
+                with gr.Row():
+                    # Left Panel - Controls
+                    with gr.Column(scale=1):
+                        
+                        # Input images
+                        with gr.Group():
+                            gr.Markdown("### 🖼️ Input Images")
+                            inpaint_input = gr.Image(
+                                label="Upload Input Image",
+                                type="pil",
+                                height=250
+                            )
+                            
+                            inpaint_mask = gr.Image(
+                                label="Upload Mask Image (white = edit area)",
+                                type="pil",
+                                height=250
+                            )
+                        
+                        # Prompt inputs
+                        with gr.Group():
+                            gr.Markdown("### 📝 Prompt Settings")
+                            inpaint_prompt = gr.Textbox(
+                                label="Prompt",
+                                placeholder="A beautiful garden with flowers...",
+                                lines=4,
+                                max_lines=8
+                            )
+                            
+                            inpaint_negative = gr.Textbox(
+                                label="Negative Prompt (optional)",
+                                placeholder="blurry, low quality, distorted...",
+                                lines=2
+                            )
+                            
+                            inpaint_language = gr.Radio(
+                                choices=["en", "zh"], 
+                                value="en", 
+                                label="Language"
+                            )
+                            
+                            inpaint_enhance = gr.Checkbox(
+                                value=True, 
+                                label="Enhance Prompt"
+                            )
+                        
+                        # Dimensions and settings
+                        with gr.Group():
+                            gr.Markdown("### 📐 Image Dimensions")
+                            with gr.Row():
+                                inpaint_width = gr.Slider(
+                                    minimum=512, maximum=2048, step=64, value=1024,
+                                    label="Width"
+                                )
+                                inpaint_height = gr.Slider(
+                                    minimum=512, maximum=2048, step=64, value=1024,
+                                    label="Height"
+                                )
+                        
+                        with gr.Group():
+                            gr.Markdown("### ⚙️ Generation Settings")
+                            inpaint_steps = gr.Slider(
+                                minimum=10, maximum=100, step=5, value=40,
+                                label="Inference Steps"
+                            )
+                            
+                            inpaint_cfg = gr.Slider(
+                                minimum=1.0, maximum=20.0, step=0.5, value=5.0,
+                                label="CFG Scale"
+                            )
+                            
+                            inpaint_seed = gr.Number(
+                                value=-1, 
+                                label="Seed (-1 for random)",
+                                precision=0
+                            )
+                    
+                    # Right Panel - Generation and Results
+                    with gr.Column(scale=2):
+                        
+                        # Generate button
+                        inpaint_generate_btn = gr.Button(
+                            "🎭 Inpaint Image", 
+                            variant="primary", 
+                            size="lg"
+                        )
+                        
+                        # Results
+                        inpaint_result = gr.Image(
+                            label="Inpainted Image",
+                            height=600,
+                            show_download_button=True,
+                            show_share_button=False
+                        )
+                        
+                        inpaint_message = gr.Textbox(
+                            label="Generation Info",
+                            lines=3,
+                            max_lines=5,
+                            interactive=False
+                        )
+            
+            # Super Resolution Tab
+            with gr.TabItem("🔍 Super Resolution"):
+                with gr.Row():
+                    # Left Panel - Controls
+                    with gr.Column(scale=1):
+                        
+                        # Input image
+                        with gr.Group():
+                            gr.Markdown("### 🖼️ Input Image")
+                            sr_input = gr.Image(
+                                label="Upload Image to Enhance",
+                                type="pil",
+                                height=400
+                            )
+                            
+                            sr_scale = gr.Slider(
+                                minimum=2, maximum=8, step=1, value=4,
+                                label="Scale Factor",
+                                info="How much to upscale the image"
+                            )
+                        
+                        with gr.Group():
+                            gr.Markdown("### ℹ️ Info")
+                            gr.Markdown("""
+                            **Super Resolution** enhances image quality and resolution:
+                            - Upload any image to upscale
+                            - Scale factor determines output size
+                            - Works best with clear, detailed images
+                            - Processing time depends on input size
+                            """)
+                    
+                    # Right Panel - Generation and Results
+                    with gr.Column(scale=2):
+                        
+                        # Generate button
+                        sr_generate_btn = gr.Button(
+                            "🔍 Enhance Image", 
+                            variant="primary", 
+                            size="lg"
+                        )
+                        
+                        # Results
+                        sr_result = gr.Image(
+                            label="Enhanced Image",
+                            height=600,
+                            show_download_button=True,
+                            show_share_button=False
+                        )
+                        
+                        sr_message = gr.Textbox(
+                            label="Enhancement Info",
+                            lines=3,
+                            max_lines=5,
+                            interactive=False
+                        )
         
-        # Example prompts
-        with gr.Accordion("💡 Example Prompts", open=False):
+        # Example prompts and usage tips
+        with gr.Accordion("💡 Usage Examples & Tips", open=False):
+            gr.Markdown("""
+            ### 🎨 Text-to-Image Examples:
+            - "A futuristic coffee shop with neon signs reading 'AI Café', cyberpunk style"
+            - "A beautiful landscape with text 'Qwen Mountain Resort - Est. 2025', traditional Chinese painting style"
+            - "A modern poster design with text 'Innovation Summit 2025', minimalist blue and white"
+            
+            ### 🖼️ Image-to-Image Tips:
+            - Upload any image and describe how you want to transform it
+            - Use strength 0.3-0.5 for subtle changes, 0.7-0.9 for major transformations
+            - Example: "Transform this photo into a watercolor painting style"
+            
+            ### 🎭 Inpainting Tips:
+            - Upload an image and a mask (white areas will be edited)
+            - Create masks in any image editor (white = edit area, black = keep original)
+            - Example: "Replace the sky with a beautiful sunset"
+            
+            ### 🔍 Super Resolution:
+            - Upload any image to enhance its quality and resolution
+            - Works best with clear, detailed images
+            - Scale factor 2-4x recommended for best results
+            """)
+            
+            # Text-to-Image examples
             example_prompts = [
                 ["A futuristic coffee shop with neon signs reading 'AI Café' and 'Welcome' in both English and Chinese, cyberpunk style", ""],
                 ["A beautiful landscape painting with text overlay reading 'Qwen Mountain Resort - Est. 2025', traditional Chinese painting style", ""],
-                ["A modern poster design with the text 'Innovation Summit 2025' in bold letters, minimalist design, blue and white color scheme", ""],
-                ["A bookstore window display with books and a sign reading 'New Arrivals - Fantasy & Sci-Fi', cozy lighting, autumn atmosphere", ""],
-                ["A vintage travel poster showing mountains with text 'Visit Beautiful Tibet - Experience the Culture', retro illustration style", ""]
+                ["A modern poster design with the text 'Innovation Summit 2025' in bold letters, minimalist design, blue and white color scheme", ""]
             ]
             
             gr.Examples(
                 examples=example_prompts,
                 inputs=[prompt_input, negative_prompt_input],
-                label="Click to try these example prompts"
+                label="Text-to-Image Examples (click to try)"
             )
         
         # Quick settings presets
@@ -296,7 +585,7 @@ def create_interface():
             outputs=[width_slider, height_slider]
         )
         
-        # Generation handler
+        # Text-to-Image generation handler
         generate_btn.click(
             fn=generate_image_ui,
             inputs=[
@@ -306,7 +595,36 @@ def create_interface():
             outputs=[result_image, result_message]
         )
         
-        # Preset handlers
+        # Image-to-Image generation handler
+        img2img_generate_btn.click(
+            fn=generate_img2img_ui,
+            inputs=[
+                img2img_prompt, img2img_negative, img2img_input, strength_slider,
+                img2img_width, img2img_height, img2img_steps, img2img_cfg, 
+                img2img_seed, img2img_language, img2img_enhance
+            ],
+            outputs=[img2img_result, img2img_message]
+        )
+        
+        # Inpainting generation handler
+        inpaint_generate_btn.click(
+            fn=generate_inpaint_ui,
+            inputs=[
+                inpaint_prompt, inpaint_negative, inpaint_input, inpaint_mask,
+                inpaint_width, inpaint_height, inpaint_steps, inpaint_cfg,
+                inpaint_seed, inpaint_language, inpaint_enhance
+            ],
+            outputs=[inpaint_result, inpaint_message]
+        )
+        
+        # Super Resolution handler
+        sr_generate_btn.click(
+            fn=super_resolution_ui,
+            inputs=[sr_input, sr_scale],
+            outputs=[sr_result, sr_message]
+        )
+        
+        # Text-to-Image preset handlers
         quality_preset.click(
             lambda: (80, 7.0),
             outputs=[steps_slider, cfg_slider]
@@ -358,6 +676,6 @@ if __name__ == "__main__":
         server_name="0.0.0.0",
         server_port=7860,
         share=False,  # Set True for public access
-        in_browser=False,  # Disabled for WSL2 compatibility
+        inbrowser=False,  # Disabled for WSL2 compatibility
         max_file_size="50mb"
     )

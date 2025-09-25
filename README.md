@@ -1,18 +1,21 @@
 # Qwen-Image Local Generator 🎨
 
-A professional text-to-image generation system using the Qwen-Image model, optimized for high-end hardware with local deployment capabilities.
+A professional image editing system using the Qwen-Image-Edit model, optimized for high-end hardware with local deployment capabilities.
 
-## Features
+> **🚀 New Setup**: One-command installation with Python 3.11, resumable downloads, and comprehensive testing. Run `make setup` to get started!
 
-- **Advanced Text Rendering**: Specialized in generating text within images with high accuracy
-- **Multi-language Support**: English and Chinese text generation
-- **Hardware Optimized**: Specifically tuned for RTX 4080 + AMD Threadripper setup
-- **Professional UI**: Complete Gradio web interface with advanced controls
-- **Local Deployment**: No cloud dependencies, complete privacy
-- **Metadata Management**: Automatic saving of generation parameters
-- **Multiple Presets**: Quality, aspect ratio, and style presets
+## ✨ Features
 
-## System Requirements
+- **🎯 Advanced Image Editing**: Specialized Qwen-Image-Edit pipeline for precise image modifications
+- **🌍 Multi-language Support**: English and Chinese text generation
+- **⚡ Hardware Optimized**: Specifically tuned for RTX 4080 + CUDA 12.1 setup
+- **🎨 Professional UI**: Complete Gradio web interface with advanced controls
+- **🔒 Local Deployment**: No cloud dependencies, complete privacy
+- **📊 Metadata Management**: Automatic saving of generation parameters
+- **🎛️ Multiple Presets**: Quality, aspect ratio, and style presets
+- **🔄 Resumable Downloads**: Smart model downloading with automatic resume
+
+## 🖥️ System Requirements
 
 ### Recommended Hardware
 
@@ -24,198 +27,290 @@ A professional text-to-image generation system using the Qwen-Image model, optim
 ### Software Requirements
 
 - **OS**: Ubuntu 20.04+ or WSL2 with Ubuntu
-- **Python**: 3.8+ (3.10+ recommended)
+- **Python**: 3.11 (standardized environment)
 - **CUDA**: 12.1 or compatible
-- **PyTorch**: 2.1.0+
+- **PyTorch**: 2.8.0+ with CUDA support
 
-## Quick Start
+## 🚀 Quick Start
 
-### 🚀 **Easy Launch Options**
+### **One-Time Setup**
 
-#### Interactive Launcher (Recommended)
 ```bash
-# Choose your interface interactively
-source venv/bin/activate
-python launch.py
+# Complete setup: Python 3.11 venv + dependencies + PyTorch + models
+make setup
 ```
 
-#### Direct Launch Commands
+### **Daily Use (After Setup)**
+
 ```bash
-# Standard UI (Text-to-Image only)
-python launch.py --mode standard
+# Turn ON development environment
+./dev-start.sh
 
-# Enhanced UI (All features)
-python launch.py --mode enhanced
+# Launch UI for image editing
+./dev-ui.sh
 
-# Shell script with menu
-./scripts/launch_ui.sh
-
-# Direct enhanced launch
-./scripts/restart_enhanced.sh
+# Turn OFF when done
+./dev-stop.sh
 ```
 
-### 🛡️ **Safe Restart Options**
+This will:
+
+- ✅ Create Python 3.11 virtual environment (`.venv311/`)
+- ✅ Install all dependencies with pinned versions
+- ✅ Install PyTorch with CUDA 12.1 support
+- ✅ Download Qwen-Image-Edit model (~20GB)
+
+### **Manual Setup (Step by Step)**
+
 ```bash
-# Safe restart with UI choice
-./scripts/safe_restart.sh
+# 1. Create environment
+make venv
 
-# Direct enhanced safe restart
-./scripts/restart_enhanced.sh
+# 2. Install dependencies
+make deps
+
+# 3. Install PyTorch with CUDA
+make torch
+
+# 4. Download models
+make models
 ```
 
-## Project Structure
+### **Launch Application**
+
+```bash
+# Activate environment
+source .venv311/bin/activate
+
+# Start Gradio UI
+make ui
+# or: python src/qwen_image_ui.py
+
+# Start main application
+make run
+# or: python start.py
+```
+
+### **Development Commands**
+
+```bash
+# Run smoke test
+make smoke
+
+# Format code
+make format
+
+# Run linting
+make lint
+
+# Clean up
+make clean
+
+# See all commands
+make help
+```
+
+## 📁 Project Structure
 
 ```
-Qwen2/
-├── src/                    # Main application code
-│   ├── qwen_image_ui.py   # Gradio web interface
-│   ├── qwen_generator.py  # Core generation logic
+qwen2/
+├── .venv311/              # Python 3.11 virtual environment
+├── src/                   # Main application code
+│   ├── qwen_image_ui.py  # Gradio web interface
+│   ├── qwen_generator.py # Core generation logic
 │   ├── qwen_image_config.py # Configuration settings
-│   ├── utils/             # Utility modules
-│   └── presets/           # Preset configurations
-├── scripts/               # All automation scripts
-│   ├── safe_restart.sh    # Recommended launcher (prevents segfaults)
-│   ├── restart_ui.sh      # Full diagnostic restart
-│   ├── activate.sh        # Environment activation
-│   ├── setup.sh           # Project setup
-│   └── lint.sh            # Code quality checks
-├── docs/                  # Complete documentation
-│   ├── README.md          # Documentation index
-│   ├── DEVICE_ERROR_FIX.md # GPU troubleshooting
-│   ├── UI_ACCESS_GUIDE.md  # UI setup guide
-│   └── ...                # Additional guides
-├── tools/                 # Diagnostic and utility tools
-│   ├── test_device.py     # Device diagnostics
+│   ├── utils/            # Utility modules
+│   └── presets/          # Preset configurations
+├── scripts/              # Automation scripts
+│   ├── setup_env.sh      # Environment setup
+│   ├── setup_models.sh   # Model download
+│   └── activate.sh       # Quick activation
+├── tools/                # Development tools
+│   ├── download_models.py # Resumable model downloader
+│   ├── test_device.py    # Device diagnostics
 │   └── emergency_device_fix.py # Emergency repairs
-├── reports/               # Generated reports and logs
-├── configs/               # Configuration files
-├── generated_images/      # Output directory
-└── tests/                 # Test suite
+├── examples/             # Example scripts
+│   └── qwen_edit_smoke.py # End-to-end test
+├── models/               # Downloaded models
+│   └── Qwen-Image-Edit/  # Main model (~20GB)
+├── generated_images/     # Output directory
+├── docs/                 # Documentation
+├── tests/                # Test suite
+├── Makefile             # Development shortcuts
+├── SETUP.md             # Detailed setup guide
+└── requirements.txt     # Pinned dependencies
 ```
 
-## Usage Examples
+## 💡 Usage Examples
 
-### Basic Generation
+### Quick Test
+
+```bash
+# Run end-to-end smoke test
+make smoke
+# This creates a test image with "Add a red kite flying in the sky"
+```
+
+### Basic Image Editing
 
 ```python
-from src.qwen_generator import QwenImageGenerator
+from diffusers import QwenImageEditPipeline
+from PIL import Image
+import torch
 
-generator = QwenImageGenerator()
-generator.load_model()
-
-image, message = generator.generate_image(
-    prompt="A coffee shop with a sign reading 'AI Café'",
-    width=1664,
-    height=928
+# Load pipeline
+pipe = QwenImageEditPipeline.from_pretrained(
+    "./models/Qwen-Image-Edit",
+    torch_dtype=torch.float16
 )
+pipe = pipe.to("cuda")
+
+# Edit image
+image = Image.open("input.jpg")
+result = pipe(
+    prompt="Add a beautiful sunset in the background",
+    image=image
+).images[0]
+
+result.save("edited_image.jpg")
 ```
 
 ### Advanced Settings
 
 ```python
-image, message = generator.generate_image(
-    prompt="Modern art gallery with text 'Innovation 2025'",
-    negative_prompt="blurry, low quality",
-    width=1472,
-    height=1140,
-    num_inference_steps=80,
-    cfg_scale=7.0,
-    seed=42,
-    language="en"
-)
+# High-quality editing with custom parameters
+result = pipe(
+    prompt="Transform this into a cyberpunk scene with neon lights",
+    image=image,
+    num_inference_steps=50,
+    guidance_scale=7.5,
+    strength=0.8
+).images[0]
 ```
 
-## Configuration
+## ⚙️ Configuration
 
 ### Hardware Optimization
 
 The system automatically detects and optimizes for your hardware:
 
-- **RTX 4080**: Uses bfloat16 precision, attention slicing
-- **High RAM**: Enables larger batch processing
-- **CUDA 12.1**: Optimized PyTorch installation
+- **RTX 4080**: Uses float16 precision, memory optimization
+- **CUDA 12.1**: Latest PyTorch with optimized CUDA kernels
+- **High RAM**: Efficient model loading and caching
 
-### Quality Presets
+### Environment Features
 
-- **Fast**: 20 steps, CFG 3.0 (~15-20 seconds)
-- **Balanced**: 50 steps, CFG 4.0 (~30-40 seconds)
-- **High**: 80 steps, CFG 7.0 (~50-60 seconds)
+- **🐍 Python 3.11**: Standardized environment for consistency
+- **📦 Pinned Dependencies**: Reproducible builds with exact versions
+- **🔄 Resumable Downloads**: Smart model downloading with auto-resume
+- **🧪 Smoke Testing**: Quick validation of complete pipeline
+- **🛠️ Development Tools**: Integrated linting, formatting, and testing
 
-### Aspect Ratios
+### Model Information
 
-- Square (1:1): 1328×1328
-- Landscape (16:9): 1664×928
-- Portrait (9:16): 928×1664
-- Photo (4:3): 1472×1140
-- Ultra-wide (21:9): 1792×768
+- **Model**: Qwen/Qwen-Image-Edit
+- **Size**: ~20GB total
+- **Type**: Image editing and enhancement
+- **Precision**: float16 for RTX 40-series GPUs
+- **VRAM Usage**: ~12-15GB during inference
 
-## Performance
+## 📊 Performance
 
-### Expected Generation Times (RTX 4080)
+### Expected Performance (RTX 4080)
 
-| Quality | Steps | Time | Use Case |
-|---------|-------|------|----------|
-| Fast | 20 | 15-20s | Quick previews |
-| Balanced | 50 | 30-40s | General use |
-| High | 80 | 50-60s | Final quality |
+| Operation        | Time        | VRAM Usage | Notes                 |
+| ---------------- | ----------- | ---------- | --------------------- |
+| Model Loading    | 30-60s      | 12GB       | One-time startup      |
+| Image Editing    | 10-30s      | 15GB       | Depends on complexity |
+| Batch Processing | 5-15s/image | 15GB       | Multiple edits        |
 
 ### Memory Usage
 
-- **VRAM**: 12-15GB during generation
+- **VRAM**: 12-15GB during inference
 - **System RAM**: 8-12GB active usage
 - **Storage**: ~2-5MB per generated image
+- **Model Cache**: ~20GB for Qwen-Image-Edit
 
-## Troubleshooting
+### Optimization Tips
 
-### CUDA Memory Management (⭐ NEW IMPLEMENTATION)
+- Use `torch.float16` for RTX 40-series GPUs
+- Enable attention slicing for memory efficiency
+- Keep VRAM usage under 14GB for stability
+- Use the smoke test to verify optimal performance
 
-We've implemented a comprehensive solution for CUDA out of memory errors:
-
-```bash
-# One-click fix for CUDA memory issues
-python tools/fix_cuda_memory.py
-
-# Manual memory-safe download
-python tools/download_qwen_edit_memory_safe.py
-
-# Test memory-optimized loading
-python test_qwen_edit_fix.py
-```
-
-**Key Features:**
-- ✅ Automatic GPU memory clearing
-- ✅ Memory-optimized model loading with device mapping
-- ✅ VRAM reservation (12GB model + 4GB system)
-- ✅ Integration testing and verification
-
-**Implementation Details:** See [`docs/CUDA_MEMORY_IMPLEMENTATION_PLAN.md`](docs/CUDA_MEMORY_IMPLEMENTATION_PLAN.md)
+## 🔧 Troubleshooting
 
 ### Quick Diagnostics
 
 ```bash
-# Test system compatibility
+# Test complete pipeline
+make smoke
+
+# Check system compatibility
 python tools/test_device.py
 
 # Emergency device fixes
 python tools/emergency_device_fix.py
-
-# Safe restart (prevents segfaults)
-./scripts/safe_restart.sh
 ```
 
 ### Common Issues
 
-1. **Segmentation Fault**: Use `./scripts/safe_restart.sh` instead of direct launch
-2. **CUDA Out of Memory**: Reduce image size or enable CPU offload
-3. **Model Download Slow**: Use HuggingFace cache or local mirror
-4. **Generation Fails**: Check PyTorch CUDA installation
+1. **Model Download Stuck**:
+
+   ```bash
+   # Resume download
+   make models
+   ```
+
+2. **CUDA Out of Memory**:
+
+   ```bash
+   # Clear GPU memory and restart
+   make clean
+   make smoke
+   ```
+
+3. **QwenImageEditPipeline not found**:
+
+   ```bash
+   # Reinstall latest diffusers
+   source .venv311/bin/activate
+   pip uninstall -y diffusers
+   pip install git+https://github.com/huggingface/diffusers.git
+   ```
+
+4. **Environment Issues**:
+   ```bash
+   # Clean rebuild
+   rm -rf .venv311
+   make setup
+   ```
+
+### Resumable Downloads
+
+If model download gets interrupted:
+
+```bash
+# Downloads automatically resume from where they left off
+make models
+
+# Check download progress
+ls -la models/Qwen-Image-Edit/
+du -sh models/Qwen-Image-Edit/
+```
+
+### Performance Issues
+
+- **Slow generation**: Ensure CUDA is properly installed
+- **Memory errors**: Use `torch.float16` precision
+- **Crashes**: Run `make smoke` to validate setup
 
 ### Documentation
 
-- 📚 **Complete guides**: See `docs/` directory
-- 🔧 **Device issues**: `docs/DEVICE_ERROR_FIX.md`
-- 🌐 **UI access**: `docs/UI_ACCESS_GUIDE.md`
-- 🖥️ **WSL2 setup**: `docs/WSL2_BROWSER_SETUP.md`
+- 📖 **Setup Guide**: [`SETUP.md`](SETUP.md) - Comprehensive setup instructions
+- 🔧 **Device Issues**: `docs/DEVICE_ERROR_FIX.md`
+- 🌐 **UI Access**: `docs/UI_ACCESS_GUIDE.md`
+- 🖥️ **WSL2 Setup**: `docs/WSL2_BROWSER_SETUP.md`
 
 ### Performance Tips
 
@@ -225,25 +320,46 @@ python tools/emergency_device_fix.py
 - Enable attention slicing for memory efficiency
 - Keep VRAM usage under 14GB for stability
 
-## Contributing
+## 🚀 What's New
+
+### ✨ Latest Updates
+
+- **🐍 Python 3.11 Environment**: Standardized setup with `.venv311/`
+- **📦 Pinned Dependencies**: Reproducible builds with exact versions
+- **🔄 Resumable Downloads**: Smart model downloading with auto-resume
+- **🛠️ Makefile Integration**: One-command setup and development shortcuts
+- **🧪 Smoke Testing**: Quick end-to-end pipeline validation
+- **📖 Comprehensive Docs**: Detailed setup guide in `SETUP.md`
+
+### 🎯 Key Features
+
+- **Latest Diffusers**: Direct from GitHub with QwenImageEditPipeline
+- **CUDA 12.1 Optimized**: PyTorch 2.8.0+ with latest CUDA support
+- **Memory Efficient**: Optimized for RTX 4080 with 16GB VRAM
+- **Developer Friendly**: Integrated linting, formatting, and testing
+
+## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch
-3. Test your changes thoroughly
-4. Submit a pull request
+3. Test your changes with `make smoke`
+4. Run quality checks with `make lint` and `make format`
+5. Submit a pull request
 
-## License
+## 📄 License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-## Acknowledgments
+## 🙏 Acknowledgments
 
-- **Qwen Team**: For the amazing Qwen-Image model
-- **Hugging Face**: For the diffusers library
+- **Qwen Team**: For the amazing Qwen-Image-Edit model
+- **Hugging Face**: For the diffusers library and model hosting
 - **Gradio**: For the web interface framework
+- **PyTorch Team**: For the excellent deep learning framework
 
 ---
 
-**Hardware Optimized**: Specifically tuned for RTX 4080 + AMD Threadripper setups
-**Local Privacy**: All processing happens on your hardware
-**Professional Quality**: Production-ready text-to-image generation
+**🎯 Hardware Optimized**: Specifically tuned for RTX 4080 + CUDA 12.1 setups  
+**🔒 Local Privacy**: All processing happens on your hardware  
+**⚡ Production Ready**: Professional-quality image editing pipeline  
+**🛠️ Developer Friendly**: Complete development environment with one command

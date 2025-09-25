@@ -37,6 +37,7 @@ MANIFEST
 
 # Virtual environments
 venv/
+.venv*/
 env/
 ENV/
 env.bak/
@@ -131,3 +132,20 @@ local_settings.py
 # Qwen model directories (large files)
 models--*/
 test_model/
+
+# Cache and offload directories
+cache/
+offload/
+
+# Generated test files
+generated_smoke_test.jpg
+perf_test_*.jpg
+performance_metrics_demo.json
+demo_performance_results.json
+
+# Temporary build artifacts
+=*
+acme.json
+
+# Kiro workspace (IDE specific)
+.kiro/

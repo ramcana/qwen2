@@ -11,26 +11,56 @@ export interface GenerationRequest {
   aspect_ratio?: string;
 }
 
+export interface ImageToImageRequest extends GenerationRequest {
+  init_image_path: string;
+  strength: number;
+}
+
 export interface GenerationResponse {
   success: boolean;
   image_path?: string;
   message: string;
   generation_time?: number;
-  parameters?: any;
+  parameters?: GenerationParameters;
   job_id?: string;
+}
+
+export interface GenerationParameters {
+  prompt: string;
+  negative_prompt?: string;
+  width: number;
+  height: number;
+  num_inference_steps: number;
+  cfg_scale: number;
+  seed: number;
+  language: 'en' | 'zh';
+  enhance_prompt: boolean;
+  aspect_ratio?: string;
 }
 
 export interface StatusResponse {
   model_loaded: boolean;
-  gpu_available: boolean;
+  device: string;
   memory_info?: {
-    allocated_gb: number;
-    total_gb: number;
-    usage_percent: number;
+    total_memory: number;
+    allocated_memory: number;
+    cached_memory: number;
+    free_memory: number;
     device_name?: string;
+    total_memory_gb?: number;
+    allocated_memory_gb?: number;
+    free_memory_gb?: number;
+    memory_usage_percent?: number;
   };
-  queue_size: number;
-  is_generating: boolean;
+  current_generation?: string | null;
+  queue_length: number;
+  initialization?: {
+    status: string;
+    message: string;
+    progress: number;
+    model_loaded: boolean;
+    error?: string;
+  };
 }
 
 export interface AspectRatioResponse {
@@ -39,13 +69,40 @@ export interface AspectRatioResponse {
 
 export interface QueueItem {
   job_id: string;
-  type: string;
-  request: any;
-  timestamp: string;
+  type: 'text-to-image' | 'image-to-image';
+  request: GenerationRequest | ImageToImageRequest;
+  status: 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
+  created_at: string;
+  started_at?: string;
+  completed_at?: string;
+  image_path?: string;
+  generation_time?: number;
+  error?: string;
+  message?: string;
 }
 
 export interface QueueResponse {
-  queue_size: number;
-  is_generating: boolean;
-  queue: QueueItem[];
+  queue: Record<string, QueueItem>;
+  current: string | null;
+}
+
+export interface MemoryInfo {
+  device_name?: string;
+  total_memory: number;
+  allocated_memory: number;
+  cached_memory: number;
+  free_memory: number;
+  total_memory_gb?: number;
+  allocated_memory_gb?: number;
+  cached_memory_gb?: number;
+  free_memory_gb?: number;
+  memory_usage_percent?: number;
+  freed_allocated?: number;
+  freed_cached?: number;
+}
+
+export interface MemoryResponse {
+  success: boolean;
+  message: string;
+  memory_info?: MemoryInfo;
 }

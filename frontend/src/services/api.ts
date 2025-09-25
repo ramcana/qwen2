@@ -3,11 +3,13 @@ import {
     AspectRatioResponse,
     GenerationRequest,
     GenerationResponse,
+    ImageToImageRequest,
+    MemoryResponse,
     QueueResponse,
     StatusResponse
 } from '../types/api';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://api.localhost';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -47,6 +49,13 @@ export const generateTextToImage = async (request: GenerationRequest): Promise<G
   return response.data;
 };
 
+export const generateImageToImage = async (
+  request: ImageToImageRequest
+): Promise<GenerationResponse> => {
+  const response = await api.post('/generate/image-to-image', request);
+  return response.data;
+};
+
 export const getAspectRatios = async (): Promise<AspectRatioResponse> => {
   const response = await api.get('/aspect-ratios');
   return response.data;
@@ -62,8 +71,13 @@ export const cancelJob = async (jobId: string): Promise<{ success: boolean; mess
   return response.data;
 };
 
-export const clearMemory = async (): Promise<{ success: boolean; message: string; memory_info: any }> => {
+export const clearMemory = async (): Promise<MemoryResponse> => {
   const response = await api.get('/memory/clear');
+  return response.data;
+};
+
+export const getMemoryStatus = async (): Promise<MemoryResponse> => {
+  const response = await api.get('/memory/status');
   return response.data;
 };
 

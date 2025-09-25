@@ -13,7 +13,7 @@ sleep 3
 
 # Activate environment
 echo "🐍 Activating environment..."
-source venv/bin/activate
+source .venv312/bin/activate
 
 # Light CUDA cleanup only
 echo "🧹 Light CUDA cleanup..."

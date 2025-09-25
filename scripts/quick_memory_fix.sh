@@ -10,7 +10,7 @@ cd "$(dirname "$0")/.." || exit 1
 
 # Activate virtual environment
 echo "📦 Activating virtual environment..."
-source venv/bin/activate || {
+source .venv312/bin/activate || {
     echo "❌ Failed to activate virtual environment"
     echo "💡 Make sure you're in the Qwen2 project directory"
     exit 1

@@ -14,7 +14,7 @@ cd qwen-image-ui
 # Create virtual environment
 echo "📦 Creating virtual environment..."
 python3 -m venv venv
-source venv/bin/activate
+source .venv312/bin/activate
 
 # Upgrade pip
 pip install --upgrade pip

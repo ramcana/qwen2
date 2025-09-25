@@ -34,7 +34,14 @@ app = FastAPI(
 # CORS middleware for React frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000"],
+    allow_origins=[
+        "http://localhost:3000", 
+        "http://localhost:5173", 
+        "http://127.0.0.1:3000",
+        "http://localhost",  
+        "http://qwen.localhost",  
+        "http://127.0.0.1"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -99,11 +106,23 @@ class AspectRatioResponse(BaseModel):
 async def clear_gpu_memory():
     """Clear GPU memory asynchronously"""
     if torch.cuda.is_available():
+        # More aggressive memory clearing
+        import gc
+        
+        # Clear Python garbage collector
+        gc.collect()
+        
+        # Clear PyTorch cache multiple times
         torch.cuda.empty_cache()
         torch.cuda.synchronize()
-        import gc
+        
+        # Force another garbage collection
         gc.collect()
+        
+        # Final cache clear
         torch.cuda.empty_cache()
+        
+        print(f"🧹 GPU memory cleared. Available: {torch.cuda.get_device_properties(0).total_memory - torch.cuda.memory_reserved(0)} bytes")
 
 
 async def get_memory_info() -> Dict[str, Any]:
@@ -111,15 +130,20 @@ async def get_memory_info() -> Dict[str, Any]:
     if not torch.cuda.is_available():
         return {"gpu_available": False}
     
-    allocated = torch.cuda.memory_allocated(0)
+    # Use memory_reserved instead of memory_allocated for more accurate reporting
+    allocated = torch.cuda.memory_reserved(0)
     total = torch.cuda.get_device_properties(0).total_memory
+    
+    # Ensure we don't report more than 100% usage
+    usage_percent = min(round(100 * allocated / total, 1), 100.0)
     
     return {
         "gpu_available": True,
-        "allocated_gb": round(allocated / 1e9, 2),
-        "total_gb": round(total / 1e9, 2),
-        "usage_percent": round(100 * allocated / total, 1),
-        "device_name": torch.cuda.get_device_name(0)
+        "allocated_gb": round(allocated / (1024**3), 2),  # Use 1024^3 for more accurate GB conversion
+        "total_gb": round(total / (1024**3), 2),
+        "usage_percent": usage_percent,
+        "device_name": torch.cuda.get_device_name(0),
+        "available_gb": round((total - allocated) / (1024**3), 2)
     }
 
 
