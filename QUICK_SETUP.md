@@ -5,7 +5,7 @@
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/your-username/qwen2.git
+git clone https://github.com/ramcana/qwen2.git
 cd qwen2
 ```
 

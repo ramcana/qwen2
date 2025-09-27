@@ -51,7 +51,7 @@ A comprehensive AI image generation and editing system combining Qwen-Image mode
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/your-username/qwen2.git
+git clone https://github.com/ramcana/qwen2.git
 cd qwen2
 
 # 2. Clone DiffSynth-Studio (required dependency)
