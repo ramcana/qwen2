@@ -27,6 +27,19 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from qwen_generator import QwenImageGenerator
 from qwen_image_config import ASPECT_RATIOS
 
+# Import DiffSynth components
+from diffsynth_service import DiffSynthService, DiffSynthConfig
+from diffsynth_models import (
+    ImageEditRequest, ImageEditResponse, InpaintRequest, 
+    OutpaintRequest, StyleTransferRequest, EditOperation
+)
+
+# Import ControlNet components
+from controlnet_service import (
+    ControlNetService, ControlNetType,
+    ControlNetDetectionResult, ControlMapResult
+)
+
 # Initialize FastAPI app
 app = FastAPI(
     title="Qwen-Image API",
@@ -37,14 +50,16 @@ app = FastAPI(
 # CORS middleware for React frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://frontend.localhost", "http://api.localhost"],
+    allow_origins=["*"],  # Allow all origins for development
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Global generator instance
+# Global service instances
 generator: Optional[QwenImageGenerator] = None
+diffsynth_service: Optional[DiffSynthService] = None
+controlnet_service: Optional[ControlNetService] = None
 generation_queue: Dict[str, Dict] = {}
 current_generation: Optional[str] = None
 
@@ -80,6 +95,40 @@ class GenerationResponse(BaseModel):
     generation_time: Optional[float] = None
     parameters: Optional[Dict] = None
     job_id: Optional[str] = None
+
+# ControlNet API Models
+class ControlNetRequest(BaseModel):
+    """Request model for ControlNet-guided generation"""
+    
+    # Input data
+    prompt: str
+    image_path: Optional[str] = None
+    image_base64: Optional[str] = None
+    control_image_path: Optional[str] = None
+    control_image_base64: Optional[str] = None
+    
+    # ControlNet configuration
+    control_type: str = "auto"  # Will be converted to ControlNetType enum
+    controlnet_conditioning_scale: float = 1.0
+    control_guidance_start: float = 0.0
+    control_guidance_end: float = 1.0
+    
+    # Generation parameters
+    negative_prompt: Optional[str] = None
+    num_inference_steps: int = 20
+    guidance_scale: float = 7.5
+    width: int = 768
+    height: int = 768
+    seed: Optional[int] = None
+    
+    # Processing options
+    use_tiled_processing: Optional[bool] = None
+    additional_params: Optional[Dict[str, Any]] = None
+
+class ControlDetectionRequest(BaseModel):
+    """Request model for control type detection"""
+    image_path: Optional[str] = None
+    image_base64: Optional[str] = None
 
 # Global state for initialization
 initialization_status = {
@@ -453,6 +502,701 @@ async def get_memory_status():
             return {"success": False, "message": "CUDA not available"}
     except Exception as e:
         return {"success": False, "message": f"Failed to get memory status: {str(e)}"}
+
+# DiffSynth API Endpoints
+
+@app.post("/diffsynth/edit", response_model=ImageEditResponse)
+async def diffsynth_edit_image(request: ImageEditRequest, background_tasks: BackgroundTasks):
+    """General image editing using DiffSynth"""
+    global diffsynth_service
+    
+    try:
+        # Initialize DiffSynth service if needed
+        if diffsynth_service is None:
+            diffsynth_service = DiffSynthService()
+        
+        # Create job ID for tracking
+        job_id = str(uuid.uuid4())
+        
+        # Add to queue
+        generation_queue[job_id] = {
+            "status": "queued",
+            "request": request.dict(),
+            "created_at": datetime.now().isoformat(),
+            "type": "diffsynth-edit"
+        }
+        
+        # Start processing in background
+        background_tasks.add_task(process_diffsynth_edit, job_id, request)
+        
+        return ImageEditResponse(
+            success=True,
+            message="DiffSynth edit started",
+            operation=EditOperation.EDIT,
+            parameters={"job_id": job_id}
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"DiffSynth edit failed: {str(e)}")
+
+@app.post("/diffsynth/inpaint", response_model=ImageEditResponse)
+async def diffsynth_inpaint(request: InpaintRequest, background_tasks: BackgroundTasks):
+    """Inpainting using DiffSynth"""
+    global diffsynth_service
+    
+    try:
+        # Initialize DiffSynth service if needed
+        if diffsynth_service is None:
+            diffsynth_service = DiffSynthService()
+        
+        # Create job ID for tracking
+        job_id = str(uuid.uuid4())
+        
+        # Add to queue
+        generation_queue[job_id] = {
+            "status": "queued",
+            "request": request.dict(),
+            "created_at": datetime.now().isoformat(),
+            "type": "diffsynth-inpaint"
+        }
+        
+        # Start processing in background
+        background_tasks.add_task(process_diffsynth_inpaint, job_id, request)
+        
+        return ImageEditResponse(
+            success=True,
+            message="DiffSynth inpaint started",
+            operation=EditOperation.INPAINT,
+            parameters={"job_id": job_id}
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"DiffSynth inpaint failed: {str(e)}")
+
+@app.post("/diffsynth/outpaint", response_model=ImageEditResponse)
+async def diffsynth_outpaint(request: OutpaintRequest, background_tasks: BackgroundTasks):
+    """Image extension using DiffSynth"""
+    global diffsynth_service
+    
+    try:
+        # Initialize DiffSynth service if needed
+        if diffsynth_service is None:
+            diffsynth_service = DiffSynthService()
+        
+        # Create job ID for tracking
+        job_id = str(uuid.uuid4())
+        
+        # Add to queue
+        generation_queue[job_id] = {
+            "status": "queued",
+            "request": request.dict(),
+            "created_at": datetime.now().isoformat(),
+            "type": "diffsynth-outpaint"
+        }
+        
+        # Start processing in background
+        background_tasks.add_task(process_diffsynth_outpaint, job_id, request)
+        
+        return ImageEditResponse(
+            success=True,
+            message="DiffSynth outpaint started",
+            operation=EditOperation.OUTPAINT,
+            parameters={"job_id": job_id}
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"DiffSynth outpaint failed: {str(e)}")
+
+@app.post("/diffsynth/style-transfer", response_model=ImageEditResponse)
+async def diffsynth_style_transfer(request: StyleTransferRequest, background_tasks: BackgroundTasks):
+    """Style transfer using DiffSynth"""
+    global diffsynth_service
+    
+    try:
+        # Initialize DiffSynth service if needed
+        if diffsynth_service is None:
+            diffsynth_service = DiffSynthService()
+        
+        # Create job ID for tracking
+        job_id = str(uuid.uuid4())
+        
+        # Add to queue
+        generation_queue[job_id] = {
+            "status": "queued",
+            "request": request.dict(),
+            "created_at": datetime.now().isoformat(),
+            "type": "diffsynth-style-transfer"
+        }
+        
+        # Start processing in background
+        background_tasks.add_task(process_diffsynth_style_transfer, job_id, request)
+        
+        return ImageEditResponse(
+            success=True,
+            message="DiffSynth style transfer started",
+            operation=EditOperation.STYLE_TRANSFER,
+            parameters={"job_id": job_id}
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"DiffSynth style transfer failed: {str(e)}")
+
+# Background processing functions for DiffSynth operations
+
+async def process_diffsynth_edit(job_id: str, request: ImageEditRequest):
+    """Process DiffSynth edit operation"""
+    global diffsynth_service, current_generation, generation_queue
+    
+    current_generation = job_id
+    generation_queue[job_id]["status"] = "processing"
+    generation_queue[job_id]["started_at"] = datetime.now().isoformat()
+    
+    try:
+        # Process the edit request
+        response = diffsynth_service.edit_image(request)
+        
+        # Update queue with results
+        generation_queue[job_id].update({
+            "status": "completed" if response.success else "failed",
+            "response": response.dict(),
+            "completed_at": datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        generation_queue[job_id].update({
+            "status": "failed",
+            "error": str(e),
+            "completed_at": datetime.now().isoformat()
+        })
+    finally:
+        current_generation = None
+
+async def process_diffsynth_inpaint(job_id: str, request: InpaintRequest):
+    """Process DiffSynth inpaint operation"""
+    global diffsynth_service, current_generation, generation_queue
+    
+    current_generation = job_id
+    generation_queue[job_id]["status"] = "processing"
+    generation_queue[job_id]["started_at"] = datetime.now().isoformat()
+    
+    try:
+        # Process the inpaint request
+        response = diffsynth_service.inpaint(request)
+        
+        # Update queue with results
+        generation_queue[job_id].update({
+            "status": "completed" if response.success else "failed",
+            "response": response.dict(),
+            "completed_at": datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        generation_queue[job_id].update({
+            "status": "failed",
+            "error": str(e),
+            "completed_at": datetime.now().isoformat()
+        })
+    finally:
+        current_generation = None
+
+async def process_diffsynth_outpaint(job_id: str, request: OutpaintRequest):
+    """Process DiffSynth outpaint operation"""
+    global diffsynth_service, current_generation, generation_queue
+    
+    current_generation = job_id
+    generation_queue[job_id]["status"] = "processing"
+    generation_queue[job_id]["started_at"] = datetime.now().isoformat()
+    
+    try:
+        # Process the outpaint request
+        response = diffsynth_service.outpaint(request)
+        
+        # Update queue with results
+        generation_queue[job_id].update({
+            "status": "completed" if response.success else "failed",
+            "response": response.dict(),
+            "completed_at": datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        generation_queue[job_id].update({
+            "status": "failed",
+            "error": str(e),
+            "completed_at": datetime.now().isoformat()
+        })
+    finally:
+        current_generation = None
+
+async def process_diffsynth_style_transfer(job_id: str, request: StyleTransferRequest):
+    """Process DiffSynth style transfer operation"""
+    global diffsynth_service, current_generation, generation_queue
+    
+    current_generation = job_id
+    generation_queue[job_id]["status"] = "processing"
+    generation_queue[job_id]["started_at"] = datetime.now().isoformat()
+    
+    try:
+        # Process the style transfer request
+        response = diffsynth_service.style_transfer(request)
+        
+        # Update queue with results
+        generation_queue[job_id].update({
+            "status": "completed" if response.success else "failed",
+            "response": response.dict(),
+            "completed_at": datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        generation_queue[job_id].update({
+            "status": "failed",
+            "error": str(e),
+            "completed_at": datetime.now().isoformat()
+        })
+    finally:
+        current_generation = None
+
+# ControlNet API Endpoints
+
+@app.post("/controlnet/detect")
+async def controlnet_detect_control_type(request: ControlDetectionRequest):
+    """Detect appropriate ControlNet type for input image"""
+    global controlnet_service
+    
+    try:
+        # Validate input
+        if not request.image_path and not request.image_base64:
+            raise HTTPException(status_code=400, detail="Either image_path or image_base64 must be provided")
+        
+        # Initialize ControlNet service if needed
+        if controlnet_service is None:
+            controlnet_service = ControlNetService()
+        
+        # Determine input image
+        input_image = request.image_path if request.image_path else request.image_base64
+        
+        # Detect control type
+        detection_result = controlnet_service.detect_control_type(input_image)
+        
+        return {
+            "success": True,
+            "detected_type": detection_result.detected_type.value,
+            "confidence": detection_result.confidence,
+            "all_scores": {k.value: v for k, v in detection_result.all_scores.items()},
+            "processing_time": detection_result.processing_time
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Control type detection failed: {str(e)}")
+
+@app.post("/controlnet/generate")
+async def controlnet_generate(request: ControlNetRequest, background_tasks: BackgroundTasks):
+    """Generate image using ControlNet guidance"""
+    global controlnet_service
+    
+    try:
+        # Initialize ControlNet service if needed
+        if controlnet_service is None:
+            controlnet_service = ControlNetService()
+        
+        # Convert string control_type to enum
+        try:
+            control_type_enum = ControlNetType(request.control_type.lower())
+        except ValueError:
+            control_type_enum = ControlNetType.AUTO
+        
+        # Create job ID for tracking
+        job_id = str(uuid.uuid4())
+        
+        # Add to queue
+        generation_queue[job_id] = {
+            "status": "queued",
+            "request": request.dict(),
+            "created_at": datetime.now().isoformat(),
+            "type": "controlnet-generate"
+        }
+        
+        # Start processing in background
+        background_tasks.add_task(process_controlnet_generate, job_id, request, control_type_enum)
+        
+        return {
+            "success": True,
+            "message": "ControlNet generation started",
+            "job_id": job_id,
+            "control_type": control_type_enum.value
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"ControlNet generation failed: {str(e)}")
+
+@app.get("/controlnet/types")
+async def get_controlnet_types():
+    """Get available ControlNet types"""
+    try:
+        control_types = [
+            {
+                "type": control_type.value,
+                "name": control_type.value.replace("_", " ").title(),
+                "description": _get_control_type_description(control_type)
+            }
+            for control_type in ControlNetType
+            if control_type != ControlNetType.AUTO
+        ]
+        
+        return {
+            "success": True,
+            "control_types": control_types,
+            "auto_detection_available": True
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get ControlNet types: {str(e)}")
+
+def _get_control_type_description(control_type: ControlNetType) -> str:
+    """Get description for ControlNet type"""
+    descriptions = {
+        ControlNetType.CANNY: "Edge detection for structural control",
+        ControlNetType.DEPTH: "Depth estimation for 3D-aware generation",
+        ControlNetType.POSE: "Human pose detection for character control",
+        ControlNetType.NORMAL: "Normal map generation for surface details",
+        ControlNetType.SEGMENTATION: "Semantic segmentation for region control",
+        ControlNetType.SCRIBBLE: "Scribble-based control for rough sketches",
+        ControlNetType.LINEART: "Line art detection for clean outlines"
+    }
+    return descriptions.get(control_type, "Advanced control method")
+
+# Background processing function for ControlNet
+
+async def process_controlnet_generate(job_id: str, request: ControlNetRequest, control_type_enum: ControlNetType):
+    """Process ControlNet generation operation"""
+    global controlnet_service, current_generation, generation_queue
+    
+    current_generation = job_id
+    generation_queue[job_id]["status"] = "processing"
+    generation_queue[job_id]["started_at"] = datetime.now().isoformat()
+    
+    try:
+        # Create ControlNet request object for the service
+        # Import the service's ControlNetRequest class
+        from controlnet_service import ControlNetRequest as ServiceControlNetRequest
+        
+        service_request = ServiceControlNetRequest(
+            prompt=request.prompt,
+            image_path=request.image_path,
+            image_base64=request.image_base64,
+            control_image_path=request.control_image_path,
+            control_image_base64=request.control_image_base64,
+            control_type=control_type_enum,
+            controlnet_conditioning_scale=request.controlnet_conditioning_scale,
+            control_guidance_start=request.control_guidance_start,
+            control_guidance_end=request.control_guidance_end,
+            negative_prompt=request.negative_prompt,
+            num_inference_steps=request.num_inference_steps,
+            guidance_scale=request.guidance_scale,
+            width=request.width,
+            height=request.height,
+            seed=request.seed,
+            use_tiled_processing=request.use_tiled_processing,
+            additional_params=request.additional_params
+        )
+        
+        # Process the ControlNet request
+        response = controlnet_service.process_with_control(service_request)
+        
+        # Update queue with results
+        generation_queue[job_id].update({
+            "status": "completed" if response.get("success", False) else "failed",
+            "response": response,
+            "completed_at": datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        generation_queue[job_id].update({
+            "status": "failed",
+            "error": str(e),
+            "completed_at": datetime.now().isoformat()
+        })
+    finally:
+        current_generation = None
+
+# Service Management Endpoints
+
+@app.get("/services/status")
+async def get_services_status():
+    """Get status of all services"""
+    global generator, diffsynth_service, controlnet_service
+    
+    try:
+        # Check Qwen generator status
+        qwen_status = {
+            "name": "qwen-generator",
+            "status": "ready" if (generator and generator.pipe) else "not_loaded",
+            "model_loaded": generator is not None and generator.pipe is not None,
+            "device": generator.device if generator else "unknown",
+            "last_operation": None,
+            "error_count": 0
+        }
+        
+        # Check DiffSynth service status
+        diffsynth_status = {
+            "name": "diffsynth-service",
+            "status": "not_initialized",
+            "model_loaded": False,
+            "device": "unknown",
+            "last_operation": None,
+            "error_count": 0
+        }
+        
+        if diffsynth_service:
+            diffsynth_status.update({
+                "status": diffsynth_service.status.value,
+                "model_loaded": diffsynth_service.pipeline is not None,
+                "device": diffsynth_service.config.device,
+                "last_operation": diffsynth_service.last_operation_time,
+                "error_count": diffsynth_service.error_count,
+                "operation_count": diffsynth_service.operation_count,
+                "initialization_time": diffsynth_service.initialization_time
+            })
+        
+        # Check ControlNet service status
+        controlnet_status = {
+            "name": "controlnet-service",
+            "status": "ready" if controlnet_service else "not_initialized",
+            "model_loaded": controlnet_service is not None,
+            "device": controlnet_service.device if controlnet_service else "unknown",
+            "available_types": [t.value for t in ControlNetType if t != ControlNetType.AUTO] if controlnet_service else []
+        }
+        
+        # Get system resource information
+        memory_info = {}
+        if torch.cuda.is_available():
+            try:
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+                
+                total_memory = torch.cuda.get_device_properties(0).total_memory
+                allocated_memory = torch.cuda.memory_allocated()
+                cached_memory = torch.cuda.memory_reserved()
+                free_memory = max(0, total_memory - allocated_memory)
+                
+                memory_info = {
+                    "total_memory": total_memory,
+                    "allocated_memory": allocated_memory,
+                    "cached_memory": cached_memory,
+                    "free_memory": free_memory,
+                    "device_name": torch.cuda.get_device_name(0),
+                    "memory_usage_percent": round((allocated_memory / total_memory) * 100, 1)
+                }
+            except Exception as e:
+                memory_info = {"error": f"Could not get memory info: {str(e)}"}
+        
+        return {
+            "success": True,
+            "timestamp": datetime.now().isoformat(),
+            "services": {
+                "qwen": qwen_status,
+                "diffsynth": diffsynth_status,
+                "controlnet": controlnet_status
+            },
+            "system": {
+                "memory_info": memory_info,
+                "current_generation": current_generation,
+                "queue_length": len(generation_queue),
+                "cuda_available": torch.cuda.is_available()
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get services status: {str(e)}")
+
+@app.post("/services/switch")
+async def switch_service(service_name: str, action: str):
+    """Switch service state (initialize, shutdown, restart)"""
+    global generator, diffsynth_service, controlnet_service
+    
+    try:
+        if service_name not in ["qwen", "diffsynth", "controlnet"]:
+            raise HTTPException(status_code=400, detail="Invalid service name. Must be 'qwen', 'diffsynth', or 'controlnet'")
+        
+        if action not in ["initialize", "shutdown", "restart"]:
+            raise HTTPException(status_code=400, detail="Invalid action. Must be 'initialize', 'shutdown', or 'restart'")
+        
+        result = {"service": service_name, "action": action, "success": False, "message": ""}
+        
+        if service_name == "qwen":
+            if action == "initialize":
+                if generator is None:
+                    generator = QwenImageGenerator()
+                success = generator.load_model()
+                result["success"] = success
+                result["message"] = "Qwen model loaded successfully" if success else "Failed to load Qwen model"
+            
+            elif action == "shutdown":
+                if generator and generator.pipe:
+                    # Clear GPU memory
+                    generator.pipe = None
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                result["success"] = True
+                result["message"] = "Qwen service shutdown"
+            
+            elif action == "restart":
+                # Shutdown then initialize
+                if generator and generator.pipe:
+                    generator.pipe = None
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                
+                if generator is None:
+                    generator = QwenImageGenerator()
+                success = generator.load_model()
+                result["success"] = success
+                result["message"] = "Qwen service restarted successfully" if success else "Failed to restart Qwen service"
+        
+        elif service_name == "diffsynth":
+            if action == "initialize":
+                if diffsynth_service is None:
+                    diffsynth_service = DiffSynthService()
+                success = diffsynth_service.initialize()
+                result["success"] = success
+                result["message"] = "DiffSynth service initialized successfully" if success else "Failed to initialize DiffSynth service"
+            
+            elif action == "shutdown":
+                if diffsynth_service:
+                    diffsynth_service.pipeline = None
+                    diffsynth_service.status = diffsynth_service.status.__class__.OFFLINE
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                result["success"] = True
+                result["message"] = "DiffSynth service shutdown"
+            
+            elif action == "restart":
+                # Shutdown then initialize
+                if diffsynth_service:
+                    diffsynth_service.pipeline = None
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                
+                if diffsynth_service is None:
+                    diffsynth_service = DiffSynthService()
+                success = diffsynth_service.initialize()
+                result["success"] = success
+                result["message"] = "DiffSynth service restarted successfully" if success else "Failed to restart DiffSynth service"
+        
+        elif service_name == "controlnet":
+            if action == "initialize":
+                if controlnet_service is None:
+                    controlnet_service = ControlNetService()
+                result["success"] = True
+                result["message"] = "ControlNet service initialized successfully"
+            
+            elif action == "shutdown":
+                if controlnet_service:
+                    # Clear any loaded models
+                    controlnet_service._controlnet_models = {}
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                controlnet_service = None
+                result["success"] = True
+                result["message"] = "ControlNet service shutdown"
+            
+            elif action == "restart":
+                # Shutdown then initialize
+                if controlnet_service:
+                    controlnet_service._controlnet_models = {}
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                
+                controlnet_service = ControlNetService()
+                result["success"] = True
+                result["message"] = "ControlNet service restarted successfully"
+        
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Service switch failed: {str(e)}")
+
+@app.get("/services/health")
+async def check_services_health():
+    """Perform health checks on all services"""
+    global generator, diffsynth_service, controlnet_service
+    
+    try:
+        health_results = {}
+        overall_healthy = True
+        
+        # Check Qwen service health
+        qwen_healthy = True
+        qwen_issues = []
+        
+        try:
+            if generator is None or generator.pipe is None:
+                qwen_healthy = False
+                qwen_issues.append("Model not loaded")
+            else:
+                # Try a simple operation to verify functionality
+                # This is a basic health check - in production you might want a more thorough test
+                pass
+        except Exception as e:
+            qwen_healthy = False
+            qwen_issues.append(f"Health check failed: {str(e)}")
+        
+        health_results["qwen"] = {
+            "healthy": qwen_healthy,
+            "issues": qwen_issues,
+            "status": "healthy" if qwen_healthy else "unhealthy"
+        }
+        
+        # Check DiffSynth service health
+        diffsynth_healthy = True
+        diffsynth_issues = []
+        
+        try:
+            if diffsynth_service is None:
+                diffsynth_healthy = False
+                diffsynth_issues.append("Service not initialized")
+            elif diffsynth_service.status.value in ["error", "offline"]:
+                diffsynth_healthy = False
+                diffsynth_issues.append(f"Service in {diffsynth_service.status.value} state")
+        except Exception as e:
+            diffsynth_healthy = False
+            diffsynth_issues.append(f"Health check failed: {str(e)}")
+        
+        health_results["diffsynth"] = {
+            "healthy": diffsynth_healthy,
+            "issues": diffsynth_issues,
+            "status": "healthy" if diffsynth_healthy else "unhealthy"
+        }
+        
+        # Check ControlNet service health
+        controlnet_healthy = True
+        controlnet_issues = []
+        
+        try:
+            if controlnet_service is None:
+                controlnet_healthy = False
+                controlnet_issues.append("Service not initialized")
+        except Exception as e:
+            controlnet_healthy = False
+            controlnet_issues.append(f"Health check failed: {str(e)}")
+        
+        health_results["controlnet"] = {
+            "healthy": controlnet_healthy,
+            "issues": controlnet_issues,
+            "status": "healthy" if controlnet_healthy else "unhealthy"
+        }
+        
+        # Overall health
+        overall_healthy = all(service["healthy"] for service in health_results.values())
+        
+        return {
+            "success": True,
+            "overall_healthy": overall_healthy,
+            "timestamp": datetime.now().isoformat(),
+            "services": health_results
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Health check failed: {str(e)}")
 
 # Serve generated images
 @app.get("/images/{filename}")

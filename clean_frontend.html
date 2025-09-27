@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DiffSynth Image Generator</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          sans-serif;
+        background: #f5f5f5;
+        padding: 20px;
+      }
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 10px;
+        padding: 30px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+      h1 {
+        text-align: center;
+        color: #333;
+        margin-bottom: 30px;
+      }
+      .status {
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        font-weight: 500;
+      }
+      .status.success {
+        background: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+      }
+      .status.error {
+        background: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+      }
+      .status.info {
+        background: #d1ecf1;
+        color: #0c5460;
+        border: 1px solid #bee5eb;
+      }
+      .mode-selector {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 10px;
+        margin-bottom: 20px;
+      }
+      .mode-btn {
+        padding: 15px;
+        border: 2px solid #ddd;
+        background: white;
+        border-radius: 8px;
+        cursor: pointer;
+        text-align: center;
+        transition: all 0.3s;
+      }
+      .mode-btn:hover {
+        border-color: #007bff;
+      }
+      .mode-btn.active {
+        border-color: #007bff;
+        background: #007bff;
+        color: white;
+      }
+      .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 30px;
+        margin-bottom: 20px;
+      }
+      .form-group {
+        margin-bottom: 20px;
+      }
+      .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 500;
+        color: #333;
+      }
+      .form-group input,
+      .form-group textarea {
+        width: 100%;
+        padding: 12px;
+        border: 2px solid #ddd;
+        border-radius: 6px;
+        font-size: 14px;
+      }
+      .form-group input:focus,
+      .form-group textarea:focus {
+        outline: none;
+        border-color: #007bff;
+      }
+      .upload-zone {
+        border: 2px dashed #ddd;
+        border-radius: 8px;
+        padding: 40px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s;
+        margin-bottom: 15px;
+      }
+      .upload-zone:hover {
+        border-color: #007bff;
+        background: #f8f9ff;
+      }
+      .upload-zone.has-image {
+        border-color: #28a745;
+        background: #f8fff8;
+      }
+      .upload-zone img {
+        max-width: 100%;
+        max-height: 200px;
+        border-radius: 6px;
+      }
+      .btn {
+        background: #007bff;
+        color: white;
+        border: none;
+        padding: 15px 30px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 16px;
+        font-weight: 500;
+        width: 100%;
+        transition: background 0.3s;
+      }
+      .btn:hover {
+        background: #0056b3;
+      }
+      .btn:disabled {
+        background: #6c757d;
+        cursor: not-allowed;
+      }
+      .result-image {
+        max-width: 100%;
+        border-radius: 8px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        margin-top: 20px;
+      }
+      .hidden {
+        display: none;
+      }
+      .params-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 15px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🎨 DiffSynth Image Generator (Docker)</h1>
+
+      <!-- API Status -->
+      <div id="apiStatus" class="status info">
+        🔄 Checking API connection...
+      </div>
+
+      <!-- Mode Selection -->
+      <div class="mode-selector">
+        <div
+          class="mode-btn active"
+          onclick="setMode('generate')"
+          data-mode="generate"
+        >
+          <div>🎨 Generate</div>
+          <small>Text to Image</small>
+        </div>
+        <div class="mode-btn" onclick="setMode('edit')" data-mode="edit">
+          <div>✏️ Edit</div>
+          <small>Image Editing</small>
+        </div>
+        <div class="mode-btn" onclick="setMode('inpaint')" data-mode="inpaint">
+          <div>🖌️ Inpaint</div>
+          <small>Fill Areas</small>
+        </div>
+        <div
+          class="mode-btn"
+          onclick="setMode('outpaint')"
+          data-mode="outpaint"
+        >
+          <div>🔍 Outpaint</div>
+          <small>Extend Image</small>
+        </div>
+        <div
+          class="mode-btn"
+          onclick="setMode('style_transfer')"
+          data-mode="style_transfer"
+        >
+          <div>🎭 Style</div>
+          <small>Style Transfer</small>
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <!-- Left Column -->
+        <div>
+          <!-- Image Uploads -->
+          <div id="inputImageSection" class="hidden">
+            <div class="form-group">
+              <label>Input Image</label>
+              <div
+                class="upload-zone"
+                onclick="document.getElementById('inputFile').click()"
+              >
+                <div id="inputPreview">
+                  <div>📁 Click to upload image</div>
+                  <small>Drag & drop or click to select</small>
+                </div>
+              </div>
+              <input
+                type="file"
+                id="inputFile"
+                accept="image/*"
+                class="hidden"
+                onchange="handleImageUpload(this, 'input')"
+              />
+            </div>
+          </div>
+
+          <div id="maskImageSection" class="hidden">
+            <div class="form-group">
+              <label>Mask Image</label>
+              <div
+                class="upload-zone"
+                onclick="document.getElementById('maskFile').click()"
+              >
+                <div id="maskPreview">
+                  <div>🎭 Click to upload mask</div>
+                  <small>White areas will be inpainted</small>
+                </div>
+              </div>
+              <input
+                type="file"
+                id="maskFile"
+                accept="image/*"
+                class="hidden"
+                onchange="handleImageUpload(this, 'mask')"
+              />
+            </div>
+          </div>
+
+          <div id="styleImageSection" class="hidden">
+            <div class="form-group">
+              <label>Style Image</label>
+              <div
+                class="upload-zone"
+                onclick="document.getElementById('styleFile').click()"
+              >
+                <div id="stylePreview">
+                  <div>🎨 Click to upload style</div>
+                  <small>Reference image for style</small>
+                </div>
+              </div>
+              <input
+                type="file"
+                id="styleFile"
+                accept="image/*"
+                class="hidden"
+                onchange="handleImageUpload(this, 'style')"
+              />
+            </div>
+          </div>
+
+          <!-- Prompts -->
+          <div class="form-group">
+            <label>Prompt</label>
+            <textarea
+              id="prompt"
+              rows="3"
+              placeholder="Describe what you want to create or edit..."
+            >
+a beautiful sunset over mountains, digital art</textarea
+            >
+          </div>
+
+          <div class="form-group">
+            <label>Negative Prompt</label>
+            <textarea
+              id="negativePrompt"
+              rows="2"
+              placeholder="What to avoid..."
+            >
+blurry, low quality, distorted</textarea
+            >
+          </div>
+
+          <!-- Parameters -->
+          <div class="params-grid">
+            <div class="form-group">
+              <label>Width</label>
+              <input
+                type="number"
+                id="width"
+                value="512"
+                min="256"
+                max="2048"
+                step="64"
+              />
+            </div>
+            <div class="form-group">
+              <label>Height</label>
+              <input
+                type="number"
+                id="height"
+                value="512"
+                min="256"
+                max="2048"
+                step="64"
+              />
+            </div>
+            <div class="form-group">
+              <label>Steps</label>
+              <input type="number" id="steps" value="10" min="5" max="100" />
+            </div>
+            <div class="form-group">
+              <label>CFG Scale</label>
+              <input
+                type="number"
+                id="cfgScale"
+                value="7.0"
+                min="1.0"
+                max="20.0"
+                step="0.1"
+              />
+            </div>
+          </div>
+
+          <div id="strengthSection" class="form-group hidden">
+            <label>Strength: <span id="strengthValue">0.8</span></label>
+            <input
+              type="range"
+              id="strength"
+              value="0.8"
+              min="0.1"
+              max="1.0"
+              step="0.1"
+              oninput="document.getElementById('strengthValue').textContent = this.value"
+            />
+          </div>
+
+          <!-- Generate Button -->
+          <button id="generateBtn" class="btn" onclick="startGeneration()">
+            🎨 Generate Image
+          </button>
+        </div>
+
+        <!-- Right Column - Results -->
+        <div>
+          <div id="statusSection" class="hidden">
+            <div id="progressStatus" class="status info">Ready to generate</div>
+          </div>
+
+          <div id="resultSection" class="hidden">
+            <h3>Generated Image</h3>
+            <img id="resultImage" class="result-image" alt="Generated image" />
+            <div style="margin-top: 15px; text-align: center">
+              <button
+                class="btn"
+                onclick="downloadImage()"
+                style="width: auto; margin-right: 10px"
+              >
+                📥 Download
+              </button>
+              <button
+                class="btn"
+                onclick="useAsInput()"
+                style="width: auto; background: #28a745"
+              >
+                🔄 Use as Input
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let currentMode = "generate";
+      let currentJobId = null;
+      let images = { input: null, mask: null, style: null };
+
+      // Check API on load
+      window.onload = checkAPI;
+
+      async function checkAPI() {
+        const statusEl = document.getElementById("apiStatus");
+        try {
+          const response = await fetch("http://localhost:8000/health");
+          if (response.ok) {
+            const data = await response.json();
+            statusEl.className = "status success";
+            statusEl.innerHTML = `✅ API Connected - DiffSynth: ${
+              data.services?.diffsynth?.status || "unknown"
+            } | GPU: ${data.gpu?.available ? "Available" : "Not Available"}`;
+          } else {
+            throw new Error(`HTTP ${response.status}`);
+          }
+        } catch (error) {
+          statusEl.className = "status error";
+          statusEl.innerHTML = `❌ API Connection Failed: ${error.message}`;
+        }
+      }
+
+      function setMode(mode) {
+        currentMode = mode;
+
+        // Update active button
+        document.querySelectorAll(".mode-btn").forEach((btn) => {
+          btn.classList.toggle("active", btn.dataset.mode === mode);
+        });
+
+        // Show/hide sections
+        document
+          .getElementById("inputImageSection")
+          .classList.toggle("hidden", mode === "generate");
+        document
+          .getElementById("maskImageSection")
+          .classList.toggle("hidden", mode !== "inpaint");
+        document
+          .getElementById("styleImageSection")
+          .classList.toggle("hidden", mode !== "style_transfer");
+        document
+          .getElementById("strengthSection")
+          .classList.toggle("hidden", mode === "generate");
+
+        // Update button text
+        const btn = document.getElementById("generateBtn");
+        const modeNames = {
+          generate: "Generate Image",
+          edit: "Edit Image",
+          inpaint: "Inpaint Image",
+          outpaint: "Outpaint Image",
+          style_transfer: "Apply Style",
+        };
+        btn.textContent = `🎨 ${modeNames[mode]}`;
+      }
+
+      function handleImageUpload(input, type) {
+        const file = input.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          const base64 = e.target.result.split(",")[1];
+          images[type] = { file, base64, url: e.target.result };
+
+          // Update preview
+          const previewId = type + "Preview";
+          const preview = document.getElementById(previewId);
+          preview.innerHTML = `<img src="${e.target.result}" alt="${type} image">`;
+          preview.parentElement.classList.add("has-image");
+        };
+        reader.readAsDataURL(file);
+      }
+
+      async function startGeneration() {
+        const btn = document.getElementById("generateBtn");
+        const statusEl = document.getElementById("progressStatus");
+        const statusSection = document.getElementById("statusSection");
+        const resultSection = document.getElementById("resultSection");
+
+        // Validate inputs
+        if (currentMode !== "generate" && !images.input) {
+          alert("Please upload an input image");
+          return;
+        }
+        if (currentMode === "inpaint" && !images.mask) {
+          alert("Please upload a mask image");
+          return;
+        }
+        if (currentMode === "style_transfer" && !images.style) {
+          alert("Please upload a style image");
+          return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = "🔄 Processing...";
+        statusSection.classList.remove("hidden");
+        resultSection.classList.add("hidden");
+        statusEl.className = "status info";
+        statusEl.textContent = `Starting ${currentMode}...`;
+
+        try {
+          let endpoint, payload;
+
+          if (currentMode === "generate") {
+            endpoint = "http://localhost:8000/api/generate/text-to-image";
+            payload = {
+              prompt: document.getElementById("prompt").value,
+              negative_prompt: document.getElementById("negativePrompt").value,
+              width: parseInt(document.getElementById("width").value),
+              height: parseInt(document.getElementById("height").value),
+              steps: parseInt(document.getElementById("steps").value),
+              cfg_scale: parseFloat(document.getElementById("cfgScale").value),
+              seed: 42,
+            };
+          } else {
+            endpoint = "http://localhost:8000/api/edit/image";
+            payload = {
+              prompt: document.getElementById("prompt").value,
+              negative_prompt: document.getElementById("negativePrompt").value,
+              operation: currentMode,
+              width: parseInt(document.getElementById("width").value),
+              height: parseInt(document.getElementById("height").value),
+              num_inference_steps: parseInt(
+                document.getElementById("steps").value
+              ),
+              guidance_scale: parseFloat(
+                document.getElementById("cfgScale").value
+              ),
+              strength: parseFloat(document.getElementById("strength").value),
+              seed: 42,
+            };
+
+            if (images.input) payload.image_base64 = images.input.base64;
+            if (currentMode === "inpaint" && images.mask)
+              payload.mask_base64 = images.mask.base64;
+            if (currentMode === "style_transfer" && images.style) {
+              payload.style_image_base64 = images.style.base64;
+              payload.style_strength = 0.7;
+              payload.content_strength = 0.3;
+            }
+            if (currentMode === "outpaint") {
+              payload.direction = "all";
+              payload.pixels = 128;
+            }
+          }
+
+          const response = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+
+          const result = await response.json();
+          if (result.job_id) {
+            currentJobId = result.job_id;
+            statusEl.textContent = `${currentMode} started! Monitoring progress...`;
+            pollJobStatus();
+          } else {
+            throw new Error("No job ID received");
+          }
+        } catch (error) {
+          statusEl.className = "status error";
+          statusEl.textContent = `❌ Error: ${error.message}`;
+          btn.disabled = false;
+          btn.textContent = `🎨 ${
+            currentMode.charAt(0).toUpperCase() + currentMode.slice(1)
+          } Image`;
+        }
+      }
+
+      async function pollJobStatus() {
+        if (!currentJobId) return;
+
+        try {
+          const response = await fetch(
+            `http://localhost:8000/api/jobs/${currentJobId}`
+          );
+          const job = await response.json();
+
+          const statusEl = document.getElementById("progressStatus");
+          const progress = Math.round(job.progress * 100);
+          statusEl.textContent = `Status: ${job.status} (${progress}%)`;
+
+          if (job.status === "completed") {
+            statusEl.className = "status success";
+            statusEl.textContent = `✅ ${currentMode} completed in ${job.result.processing_time?.toFixed(
+              1
+            )}s`;
+
+            // Show result
+            const resultSection = document.getElementById("resultSection");
+            const resultImage = document.getElementById("resultImage");
+            resultImage.src = job.result.image_url;
+            resultSection.classList.remove("hidden");
+
+            // Reset button
+            const btn = document.getElementById("generateBtn");
+            btn.disabled = false;
+            btn.textContent = `🎨 ${
+              currentMode.charAt(0).toUpperCase() + currentMode.slice(1)
+            } Image`;
+          } else if (job.status === "failed") {
+            statusEl.className = "status error";
+            statusEl.textContent = `❌ ${currentMode} failed: ${job.error}`;
+
+            const btn = document.getElementById("generateBtn");
+            btn.disabled = false;
+            btn.textContent = `🎨 ${
+              currentMode.charAt(0).toUpperCase() + currentMode.slice(1)
+            } Image`;
+          } else {
+            // Continue polling
+            setTimeout(pollJobStatus, 2000);
+          }
+        } catch (error) {
+          console.error("Polling error:", error);
+          setTimeout(pollJobStatus, 2000);
+        }
+      }
+
+      function downloadImage() {
+        const img = document.getElementById("resultImage");
+        const a = document.createElement("a");
+        a.href = img.src;
+        a.download = `diffsynth-${currentMode}-${Date.now()}.jpg`;
+        a.click();
+      }
+
+      function useAsInput() {
+        const img = document.getElementById("resultImage");
+        // Convert image to base64 and set as input
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        ctx.drawImage(img, 0, 0);
+
+        const base64 = canvas.toDataURL("image/jpeg").split(",")[1];
+        images.input = { base64, url: canvas.toDataURL("image/jpeg") };
+
+        // Update preview
+        const preview = document.getElementById("inputPreview");
+        preview.innerHTML = `<img src="${images.input.url}" alt="input image">`;
+        preview.parentElement.classList.add("has-image");
+
+        alert("Image set as input! You can now switch to edit mode.");
+      }
+    </script>
+  </body>
+</html>
