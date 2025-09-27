@@ -1,0 +1,59 @@
+# Production Traefik Configuration for DiffSynth Enhanced UI
+
+# Global configuration
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+# Entry points
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entrypoint:
+          to: websecure
+          scheme: https
+          permanent: true
+
+  websecure:
+    address: ":443"
+
+# Certificate resolvers
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: your-email@yourdomain.com
+      storage: /acme.json
+      httpChallenge:
+        entryPoint: web
+
+# Providers
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: qwen-network
+
+# API and dashboard
+api:
+  dashboard: true
+  insecure: false
+
+# Metrics
+metrics:
+  prometheus:
+    addEntryPointsLabels: true
+    addServicesLabels: true
+
+# Logging
+log:
+  level: INFO
+  filePath: "/var/log/traefik/traefik.log"
+
+accessLog:
+  filePath: "/var/log/traefik/access.log"
+  format: json
+# Pilot (optional)
+# pilot:
+#   token: "your-pilot-token"

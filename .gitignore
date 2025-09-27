@@ -149,3 +149,6 @@ acme.json
 
 # Kiro workspace (IDE specific)
 .kiro/
+
+# External repositories (submodules)
+DiffSynth-Studio/

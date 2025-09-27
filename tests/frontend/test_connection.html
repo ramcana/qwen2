@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>API Connection Test</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 40px;
+      }
+      .status {
+        padding: 10px;
+        margin: 10px 0;
+        border-radius: 5px;
+      }
+      .success {
+        background-color: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+      }
+      .error {
+        background-color: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+      }
+      .info {
+        background-color: #d1ecf1;
+        color: #0c5460;
+        border: 1px solid #bee5eb;
+      }
+      button {
+        padding: 10px 20px;
+        margin: 5px;
+        cursor: pointer;
+      }
+      pre {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 5px;
+        overflow-x: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🔧 DiffSynth API Connection Test</h1>
+
+    <div id="status" class="status info">
+      Click "Test Connection" to check API status
+    </div>
+
+    <button onclick="testConnection()">Test Connection</button>
+    <button onclick="testGeneration()">Test Generation</button>
+    <button onclick="clearResults()">Clear</button>
+
+    <div id="results"></div>
+
+    <script>
+      const API_BASE = "http://localhost:8000";
+
+      function updateStatus(message, type = "info") {
+        const statusDiv = document.getElementById("status");
+        statusDiv.className = `status ${type}`;
+        statusDiv.innerHTML = message;
+      }
+
+      function addResult(title, content) {
+        const resultsDiv = document.getElementById("results");
+        resultsDiv.innerHTML += `
+                <h3>${title}</h3>
+                <pre>${JSON.stringify(content, null, 2)}</pre>
+            `;
+      }
+
+      async function testConnection() {
+        updateStatus("🔄 Testing API connection...", "info");
+
+        try {
+          console.log("Testing connection to:", `${API_BASE}/health`);
+
+          const response = await fetch(`${API_BASE}/health`, {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            mode: "cors",
+          });
+
+          console.log("Response status:", response.status);
+          console.log("Response headers:", [...response.headers.entries()]);
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+
+          const data = await response.json();
+          console.log("Response data:", data);
+
+          updateStatus("✅ API connection successful!", "success");
+          addResult("API Health Response", data);
+        } catch (error) {
+          console.error("Connection test failed:", error);
+          updateStatus(`❌ API connection failed: ${error.message}`, "error");
+          addResult("Error Details", {
+            message: error.message,
+            stack: error.stack,
+          });
+        }
+      }
+
+      async function testGeneration() {
+        updateStatus("🔄 Testing image generation...", "info");
+
+        try {
+          const response = await fetch(
+            `${API_BASE}/api/generate/text-to-image`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              mode: "cors",
+              body: JSON.stringify({
+                prompt: "a simple test image",
+                width: 512,
+                height: 512,
+                steps: 5,
+                cfg_scale: 7.0,
+                seed: 42,
+              }),
+            }
+          );
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+
+          const data = await response.json();
+          updateStatus("✅ Generation request successful!", "success");
+          addResult("Generation Response", data);
+
+          if (data.job_id) {
+            updateStatus("🔄 Monitoring job progress...", "info");
+            monitorJob(data.job_id);
+          }
+        } catch (error) {
+          console.error("Generation test failed:", error);
+          updateStatus(`❌ Generation test failed: ${error.message}`, "error");
+          addResult("Generation Error", {
+            message: error.message,
+            stack: error.stack,
+          });
+        }
+      }
+
+      async function monitorJob(jobId) {
+        try {
+          const response = await fetch(`${API_BASE}/api/jobs/${jobId}`);
+          const job = await response.json();
+
+          addResult(`Job Status (${jobId})`, job);
+
+          if (job.status === "processing" || job.status === "queued") {
+            setTimeout(() => monitorJob(jobId), 2000);
+          } else if (job.status === "completed") {
+            updateStatus("✅ Generation completed!", "success");
+          } else if (job.status === "failed") {
+            updateStatus(`❌ Generation failed: ${job.error}`, "error");
+          }
+        } catch (error) {
+          console.error("Job monitoring failed:", error);
+        }
+      }
+
+      function clearResults() {
+        document.getElementById("results").innerHTML = "";
+        updateStatus("Results cleared", "info");
+      }
+
+      // Auto-test on page load
+      window.onload = function () {
+        setTimeout(testConnection, 1000);
+      };
+    </script>
+  </body>
+</html>

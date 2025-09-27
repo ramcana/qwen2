@@ -1,0 +1,50 @@
+{
+  "working_models_16gb": {
+    "sdxl_turbo": {
+      "model_id": "stabilityai/sdxl-turbo",
+      "memory_usage": "~8GB",
+      "speed": "Very Fast (1 step)",
+      "quality": "Good",
+      "recommended": true
+    },
+    "sdxl_base": {
+      "model_id": "stabilityai/stable-diffusion-xl-base-1.0",
+      "memory_usage": "~12GB",
+      "speed": "Fast (20-30 steps)",
+      "quality": "High",
+      "recommended": true
+    },
+    "flux_schnell": {
+      "model_id": "black-forest-labs/FLUX.1-schnell",
+      "memory_usage": "~16GB (with CPU offload)",
+      "speed": "Fast (4 steps)",
+      "quality": "Very High",
+      "recommended": false,
+      "note": "Requires CPU offloading"
+    }
+  },
+  "qwen_image_alternatives": {
+    "online_spaces": [
+      {
+        "name": "Qwen-Image-Fast",
+        "url": "https://huggingface.co/spaces/multimodalart/Qwen-Image-Fast",
+        "description": "8-step fast generation"
+      },
+      {
+        "name": "Qwen-Image-ControlNet",
+        "url": "https://huggingface.co/spaces/InstantX/Qwen-Image-ControlNet",
+        "description": "With ControlNet support"
+      }
+    ],
+    "api_services": [
+      "Replicate",
+      "HuggingFace Inference API",
+      "Together AI"
+    ]
+  },
+  "hardware_requirements": {
+    "current_gpu": "RTX 4080 (16GB)",
+    "qwen_image_requirement": "24GB+ VRAM",
+    "recommendation": "Use online services or upgrade GPU"
+  }
+}

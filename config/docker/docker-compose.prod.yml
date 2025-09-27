@@ -1,0 +1,211 @@
+# Production Docker Compose for DiffSynth Enhanced UI
+version: "3.8"
+
+services:
+  # Traefik reverse proxy with SSL
+  traefik:
+    image: traefik:v3.0
+    container_name: qwen-traefik-prod
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik.prod.yml:/etc/traefik/traefik.yml:ro
+      - ./acme.json:/acme.json
+      - ./logs/traefik:/var/log/traefik
+    networks:
+      - qwen-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.yourdomain.com`)"
+      - "traefik.http.routers.traefik.service=api@internal"
+      - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
+    environment:
+      - TRAEFIK_LOG_LEVEL=INFO
+      - TRAEFIK_ACCESSLOG=true
+
+  # API Server with DiffSynth Enhanced UI
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: qwen-api-prod
+    restart: unless-stopped
+    volumes:
+      - ./generated_images:/app/generated_images
+      - ./uploads:/app/uploads
+      - ./cache:/app/cache
+      - ./models:/app/models
+      - ./offload:/app/offload
+      - ./logs/api:/app/logs
+      - /var/cache/huggingface:/app/cache/huggingface
+      - /var/cache/torch:/app/cache/torch
+    environment:
+      - PYTHONPATH=/app/src
+      - HF_HOME=/app/cache/huggingface
+      - TORCH_HOME=/app/cache/torch
+      - CUDA_VISIBLE_DEVICES=0
+      - DIFFSYNTH_CACHE_DIR=/app/cache/diffsynth
+      - CONTROLNET_CACHE_DIR=/app/cache/controlnet
+      - ENABLE_DIFFSYNTH=true
+      - ENABLE_CONTROLNET=true
+      - MEMORY_OPTIMIZATION=true
+      - TILED_PROCESSING_THRESHOLD=2048
+      - LOG_LEVEL=INFO
+      - ENVIRONMENT=production
+      - MAX_CONCURRENT_JOBS=3
+      - JOB_TIMEOUT=600
+      - ENABLE_METRICS=true
+    networks:
+      - qwen-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=Host(`api.yourdomain.com`)"
+      - "traefik.http.routers.api.service=api"
+      - "traefik.http.services.api.loadbalancer.server.port=8000"
+      - "traefik.http.routers.api.tls.certresolver=letsencrypt"
+      - "traefik.http.middlewares.api-ratelimit.ratelimit.burst=20"
+      - "traefik.http.middlewares.api-ratelimit.ratelimit.average=10"
+      - "traefik.http.routers.api.middlewares=api-ratelimit"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+        limits:
+          memory: 20G
+          cpus: "8"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 180s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+
+  # React Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    container_name: qwen-frontend-prod
+    restart: unless-stopped
+    volumes:
+      - ./logs/frontend:/var/log/nginx
+    networks:
+      - qwen-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`yourdomain.com`) || Host(`www.yourdomain.com`)"
+      - "traefik.http.routers.frontend.service=frontend"
+      - "traefik.http.services.frontend.loadbalancer.server.port=80"
+      - "traefik.http.routers.frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.middlewares.frontend-compress.compress=true"
+      - "traefik.http.middlewares.frontend-headers.headers.customrequestheaders.X-Forwarded-Proto=https"
+      - "traefik.http.routers.frontend.middlewares=frontend-compress,frontend-headers"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  # Redis for caching and session management
+  redis:
+    image: redis:7-alpine
+    container_name: qwen-redis-prod
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+      - ./redis.conf:/usr/local/etc/redis/redis.conf
+    networks:
+      - qwen-network
+    command: redis-server /usr/local/etc/redis/redis.conf
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Monitoring with Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: qwen-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    networks:
+      - qwen-network
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+      - "--storage.tsdb.retention.time=30d"
+      - "--web.enable-lifecycle"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prometheus.rule=Host(`metrics.yourdomain.com`)"
+      - "traefik.http.routers.prometheus.service=prometheus"
+      - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+      - "traefik.http.routers.prometheus.tls.certresolver=letsencrypt"
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: qwen-grafana
+    restart: unless-stopped
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=changeme
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_DOMAIN=dashboard.yourdomain.com
+      - GF_SERVER_ROOT_URL=https://dashboard.yourdomain.com
+    networks:
+      - qwen-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`dashboard.yourdomain.com`)"
+      - "traefik.http.routers.grafana.service=grafana"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+      - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
+
+networks:
+  qwen-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local

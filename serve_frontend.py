@@ -17,14 +17,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         super().__init__(*args, directory=os.getcwd(), **kwargs)
 
 def serve_frontend():
-    """Serve frontend files on localhost:3000"""
+    """Serve frontend files on localhost:3001"""
     
     # Check if frontend files exist
     frontend_files = [
-        "clean_frontend.html",
-        "simple_frontend.html", 
-        "enhanced_frontend.html",
-        "docker_frontend.html"
+        "frontend/html/clean_frontend.html",
+        "frontend/html/simple_frontend.html", 
+        "frontend/html/enhanced_frontend.html",
+        "frontend/html/docker_frontend.html"
     ]
     
     available_files = [f for f in frontend_files if Path(f).exists()]
@@ -44,8 +44,8 @@ def serve_frontend():
             print("Press Ctrl+C to stop")
             
             # Open browser to clean frontend
-            if "clean_frontend.html" in available_files:
-                webbrowser.open(f"http://localhost:{PORT}/clean_frontend.html")
+            if "frontend/html/clean_frontend.html" in available_files:
+                webbrowser.open(f"http://localhost:{PORT}/frontend/html/clean_frontend.html")
             
             httpd.serve_forever()
             

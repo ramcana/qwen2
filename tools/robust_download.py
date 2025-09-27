@@ -67,14 +67,26 @@ def robust_download(
         try:
             print(f"📥 Download attempt {attempt}/{retries}")
             
-            # Perform download with resume capability
+            # Perform download with resume capability to HF cache
             result = snapshot_download(
                 repo_id,
-                local_dir=out_dir,
-                local_dir_use_symlinks=False,  # Windows-safe
+                cache_dir=os.path.expanduser("~/.cache/huggingface/hub"),  # Use HF cache
                 resume_download=True,
                 max_workers=max_workers if attempt == 1 else max_workers // 2,  # Reduce workers on retry
             )
+            
+            # Create symlink or copy to output directory if different from cache
+            if out_dir != result:
+                os.makedirs(os.path.dirname(out_dir), exist_ok=True)
+                if os.name == 'nt':  # Windows
+                    import shutil
+                    if os.path.exists(out_dir):
+                        shutil.rmtree(out_dir)
+                    shutil.copytree(result, out_dir)
+                else:  # Unix/Linux
+                    if os.path.exists(out_dir):
+                        os.unlink(out_dir)
+                    os.symlink(result, out_dir)
             
             print(f"✅ Download completed successfully!")
             return result

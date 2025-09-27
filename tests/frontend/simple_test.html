@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Simple API Test</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+      }
+      .result {
+        margin: 10px 0;
+        padding: 10px;
+        border-radius: 5px;
+      }
+      .success {
+        background: #d4edda;
+        color: #155724;
+      }
+      .error {
+        background: #f8d7da;
+        color: #721c24;
+      }
+      .info {
+        background: #d1ecf1;
+        color: #0c5460;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🔧 Simple API Connection Test</h1>
+
+    <button onclick="testAPI()">Test API Connection</button>
+    <button onclick="testGeneration()">Test Generation</button>
+
+    <div id="results"></div>
+
+    <script>
+      function log(message, type = "info") {
+        const div = document.createElement("div");
+        div.className = `result ${type}`;
+        div.innerHTML = message;
+        document.getElementById("results").appendChild(div);
+        console.log(message);
+      }
+
+      async function testAPI() {
+        log("🔄 Testing API connection...", "info");
+
+        try {
+          const response = await fetch("http://localhost:8000/health");
+
+          if (response.ok) {
+            const data = await response.json();
+            log("✅ API connection successful!", "success");
+            log(`Status: ${data.status}`, "info");
+            log(`DiffSynth: ${data.services?.diffsynth?.status}`, "info");
+            log(
+              `GPU: ${data.gpu?.available ? "Available" : "Not Available"}`,
+              "info"
+            );
+          } else {
+            log(`❌ API returned status: ${response.status}`, "error");
+          }
+        } catch (error) {
+          log(`❌ API connection failed: ${error.message}`, "error");
+          log(`Error type: ${error.name}`, "error");
+        }
+      }
+
+      async function testGeneration() {
+        log("🔄 Testing generation request...", "info");
+
+        try {
+          const response = await fetch(
+            "http://localhost:8000/api/generate/text-to-image",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                prompt: "a simple test",
+                width: 512,
+                height: 512,
+                steps: 5,
+              }),
+            }
+          );
+
+          if (response.ok) {
+            const data = await response.json();
+            log("✅ Generation request successful!", "success");
+            log(`Job ID: ${data.job_id}`, "info");
+          } else {
+            log(`❌ Generation failed: ${response.status}`, "error");
+          }
+        } catch (error) {
+          log(`❌ Generation request failed: ${error.message}`, "error");
+        }
+      }
+
+      // Auto-test on load
+      window.onload = () => {
+        setTimeout(testAPI, 1000);
+      };
+    </script>
+  </body>
+</html>

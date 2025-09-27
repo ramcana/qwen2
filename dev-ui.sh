@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Quick UI launcher for daily use
+# Modern UI launcher for DiffSynth Enhanced system
 set -e
 
-echo "🎨 Starting Qwen Image Edit UI"
+echo "🎨 Starting DiffSynth Enhanced UI"
 echo "=" * 40
 
 # Activate environment
@@ -18,9 +18,9 @@ if torch.cuda.is_available():
 "
 
 echo ""
-echo "🚀 Launching Gradio UI..."
-echo "💡 Press Ctrl+C to stop"
+echo "🚀 Starting full-stack UI..."
+echo "💡 This will start both backend and frontend"
 echo ""
 
-# Launch UI
-python src/qwen_image_ui.py
+# Start the interactive launcher
+python start.py

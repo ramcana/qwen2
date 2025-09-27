@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Quick test script for daily development
+# Modern test script for DiffSynth integration
 set -e
 
-echo "🧪 Running Qwen Image Edit Tests"
+echo "🧪 Running DiffSynth Integration Tests"
 echo "=" * 40
 
 # Activate environment
@@ -11,17 +11,23 @@ source .venv311/bin/activate
 echo "🔍 System Check..."
 python -c "
 import torch
-from diffusers import QwenImageEditPipeline
+import sys
+sys.path.insert(0, 'src')
+from diffsynth_service import DiffSynthService
 print('✅ Python 3.11 environment active')
 print('✅ PyTorch:', torch.__version__)
 print('✅ CUDA:', torch.cuda.is_available())
-print('✅ QwenImageEditPipeline: Available')
+print('✅ DiffSynth-Studio: Available')
 "
 
 echo ""
-echo "🚀 Running smoke test..."
-python examples/qwen_edit_smoke.py
+echo "🚀 Running DiffSynth model loading test..."
+python test_diffsynth_model_loading.py
+
+echo ""
+echo "🧪 Running safe integration tests..."
+python -m pytest tests/test_integration_safe.py -v
 
 echo ""
 echo "✅ All tests passed!"
-echo "💡 System ready for development"
+echo "💡 DiffSynth system ready for development"

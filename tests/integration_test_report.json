@@ -1,0 +1,90 @@
+{
+  "summary": {
+    "total_duration": 0.8247885704040527,
+    "total_files": 5,
+    "passed_files": 0,
+    "failed_files": 5,
+    "success_rate": 0.0,
+    "total_tests": 0,
+    "total_passed": 0,
+    "total_failed": 0,
+    "total_skipped": 0,
+    "total_errors": 0,
+    "test_success_rate": 0
+  },
+  "file_results": {
+    "test_complete_workflow_integration_e2e.py": {
+      "file": "test_complete_workflow_integration_e2e.py",
+      "success": false,
+      "duration": 0.16973423957824707,
+      "return_code": 4,
+      "stdout": "",
+      "stderr": "ERROR: usage: __main__.py [options] [file_or_dir] [file_or_dir] [...]\n__main__.py: error: unrecognized arguments: --json-report --json-report-file=test_results_test_complete_workflow_integration_e2e.json\n  inifile: /home/ram/projects/qwen2/pyproject.toml\n  rootdir: /home/ram/projects/qwen2\n\n",
+      "test_details": {}
+    },
+    "test_api_integration_workflows.py": {
+      "file": "test_api_integration_workflows.py",
+      "success": false,
+      "duration": 0.16552186012268066,
+      "return_code": 4,
+      "stdout": "",
+      "stderr": "ERROR: usage: __main__.py [options] [file_or_dir] [file_or_dir] [...]\n__main__.py: error: unrecognized arguments: --json-report --json-report-file=test_results_test_api_integration_workflows.json\n  inifile: /home/ram/projects/qwen2/pyproject.toml\n  rootdir: /home/ram/projects/qwen2\n\n",
+      "test_details": {}
+    },
+    "test_complete_workflow_integration.py": {
+      "file": "test_complete_workflow_integration.py",
+      "success": false,
+      "duration": 0.15944194793701172,
+      "return_code": 4,
+      "stdout": "",
+      "stderr": "ERROR: usage: __main__.py [options] [file_or_dir] [file_or_dir] [...]\n__main__.py: error: unrecognized arguments: --json-report --json-report-file=test_results_test_complete_workflow_integration.json\n  inifile: /home/ram/projects/qwen2/pyproject.toml\n  rootdir: /home/ram/projects/qwen2\n\n",
+      "test_details": {}
+    },
+    "test_api_workflow_integration.py": {
+      "file": "test_api_workflow_integration.py",
+      "success": false,
+      "duration": 0.16255545616149902,
+      "return_code": 4,
+      "stdout": "",
+      "stderr": "ERROR: usage: __main__.py [options] [file_or_dir] [file_or_dir] [...]\n__main__.py: error: unrecognized arguments: --json-report --json-report-file=test_results_test_api_workflow_integration.json\n  inifile: /home/ram/projects/qwen2/pyproject.toml\n  rootdir: /home/ram/projects/qwen2\n\n",
+      "test_details": {}
+    },
+    "test_frontend_workflow_integration.py": {
+      "file": "test_frontend_workflow_integration.py",
+      "success": false,
+      "duration": 0.1668224334716797,
+      "return_code": 4,
+      "stdout": "",
+      "stderr": "ERROR: usage: __main__.py [options] [file_or_dir] [file_or_dir] [...]\n__main__.py: error: unrecognized arguments: --json-report --json-report-file=test_results_test_frontend_workflow_integration.json\n  inifile: /home/ram/projects/qwen2/pyproject.toml\n  rootdir: /home/ram/projects/qwen2\n\n",
+      "test_details": {}
+    }
+  },
+  "workflow_coverage": {
+    "workflows": {
+      "text_to_image_workflow": false,
+      "diffsynth_editing_workflow": false,
+      "controlnet_workflow": false,
+      "service_switching_workflow": false,
+      "resource_sharing_workflow": false,
+      "error_recovery_workflow": false,
+      "api_integration_workflow": false,
+      "complete_end_to_end_workflow": false
+    },
+    "coverage_percentage": 0.0,
+    "covered_workflows": [],
+    "missing_workflows": [
+      "text_to_image_workflow",
+      "diffsynth_editing_workflow",
+      "controlnet_workflow",
+      "service_switching_workflow",
+      "resource_sharing_workflow",
+      "error_recovery_workflow",
+      "api_integration_workflow",
+      "complete_end_to_end_workflow"
+    ]
+  },
+  "recommendations": [
+    "Fix failing test files: test_complete_workflow_integration_e2e.py, test_api_integration_workflows.py, test_complete_workflow_integration.py, test_api_workflow_integration.py, test_frontend_workflow_integration.py",
+    "Add tests for missing workflows: text_to_image_workflow, diffsynth_editing_workflow, controlnet_workflow, service_switching_workflow, resource_sharing_workflow, error_recovery_workflow, api_integration_workflow, complete_end_to_end_workflow"
+  ]
+}

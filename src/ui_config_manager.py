@@ -26,7 +26,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     },
     "react": {
         "enabled": False,
-        "dev_port": 3000,
+        "dev_port": 3001,
         "build_dir": "frontend/build"
     },
     "api": {

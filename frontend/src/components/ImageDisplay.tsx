@@ -1,7 +1,10 @@
-import { Clock, Copy, Download, Maximize2, Settings } from 'lucide-react';
-import React, { useState } from 'react';
-import { toast } from 'react-hot-toast';
-import { getImageUrl } from '../services/api';
+import { Clock, Settings } from "lucide-react";
+import React, { useState } from "react";
+import { toast } from "react-hot-toast";
+import { getImageUrl } from "../services/api";
+import ImageWorkspace from "./ImageWorkspace";
+import { ImageData } from "./ComparisonView";
+import { ImageVersion } from "./ImageVersioning";
 
 interface ImageDisplayProps {
   // Will be connected to generation state
@@ -9,126 +12,150 @@ interface ImageDisplayProps {
 
 const ImageDisplay: React.FC<ImageDisplayProps> = () => {
   const [generatedImage, setGeneratedImage] = useState<any>(null);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [imageVersions, setImageVersions] = useState<ImageVersion[]>([]);
+  const [currentImageId, setCurrentImageId] = useState<string | null>(null);
 
   // Mock data for now - will be replaced with actual state management
   const mockGeneration = {
     success: true,
-    image_path: 'generated_images/api_generated_20241207_123456.png',
-    message: 'Image generated successfully',
+    image_path: "generated_images/api_generated_20241207_123456.png",
+    message: "Image generated successfully",
     generation_time: 23.5,
     parameters: {
-      prompt: 'A futuristic coffee shop with neon signs',
+      prompt: "A futuristic coffee shop with neon signs",
       width: 1664,
       height: 928,
       num_inference_steps: 50,
       cfg_scale: 4.0,
-      seed: 12345
-    }
+      seed: 12345,
+    },
   };
 
-  const handleDownload = () => {
-    if (!generatedImage?.image_path) return;
-    
-    const link = document.createElement('a');
-    link.href = getImageUrl(generatedImage.image_path);
-    link.download = `qwen-image-${Date.now()}.png`;
+  // Use mock data for demonstration and convert to ImageData format
+  const displayImage = generatedImage || mockGeneration;
+
+  // Convert to ImageData format
+  const currentImage: ImageData | undefined = displayImage
+    ? {
+        id: "current",
+        url: getImageUrl(displayImage.image_path),
+        label: "Generated Image",
+        timestamp: new Date(),
+        metadata: {
+          prompt: displayImage.parameters?.prompt,
+          mode: "generate",
+          parameters: displayImage.parameters,
+        },
+      }
+    : undefined;
+
+  // Mock version history - in real app this would come from state management
+  const mockVersions: ImageVersion[] = [
+    {
+      id: "v1",
+      url: getImageUrl("generated_images/api_generated_20241207_123456.png"),
+      label: "Futuristic Coffee Shop v1",
+      timestamp: new Date(Date.now() - 3600000), // 1 hour ago
+      metadata: {
+        prompt: "A futuristic coffee shop with neon signs",
+        mode: "generate",
+      },
+      isFavorite: true,
+    },
+    {
+      id: "v2",
+      url: getImageUrl("generated_images/api_generated_20241207_123456.png"),
+      label: "Futuristic Coffee Shop v2",
+      timestamp: new Date(Date.now() - 1800000), // 30 minutes ago
+      metadata: {
+        prompt: "A futuristic coffee shop with neon signs and robots",
+        mode: "edit",
+      },
+    },
+  ];
+
+  const handleVersionSelect = (version: ImageVersion) => {
+    setCurrentImageId(version.id);
+    // In real app, this would update the current image display
+    console.log("Selected version:", version);
+  };
+
+  const handleVersionDelete = (versionId: string) => {
+    setImageVersions((prev) => prev.filter((v) => v.id !== versionId));
+    toast.success("Version deleted");
+  };
+
+  const handleVersionFavorite = (versionId: string, isFavorite: boolean) => {
+    setImageVersions((prev) =>
+      prev.map((v) => (v.id === versionId ? { ...v, isFavorite } : v))
+    );
+    toast.success(isFavorite ? "Added to favorites" : "Removed from favorites");
+  };
+
+  const handleImageDownload = (image: ImageData) => {
+    const link = document.createElement("a");
+    link.href = image.url;
+    link.download = `${image.label.replace(/\s+/g, "_")}_${image.timestamp.toISOString().split("T")[0]}.png`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    
-    toast.success('Image downloaded!');
+    toast.success("Image downloaded!");
   };
 
-  const handleCopyToClipboard = async () => {
-    if (!generatedImage?.parameters?.prompt) return;
-    
+  const handleImageShare = async (image: ImageData) => {
     try {
-      await navigator.clipboard.writeText(generatedImage.parameters.prompt);
-      toast.success('Prompt copied to clipboard!');
+      if (navigator.share) {
+        await navigator.share({
+          title: image.label,
+          text: image.metadata?.prompt || "Generated image",
+          url: image.url,
+        });
+      } else {
+        await navigator.clipboard.writeText(image.url);
+        toast.success("Image URL copied to clipboard!");
+      }
     } catch (error) {
-      toast.error('Failed to copy prompt');
+      toast.error("Failed to share image");
     }
   };
 
-  const toggleFullscreen = () => {
-    setIsFullscreen(!isFullscreen);
-  };
-
-  // Use mock data for demonstration
-  const displayImage = generatedImage || mockGeneration;
-
   return (
     <div className="space-y-6">
-      {/* Main Image Display */}
-      <div className="card p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-gray-900">Generated Image</h2>
-          
-          {displayImage && (
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={handleCopyToClipboard}
-                className="btn btn-secondary px-3 py-2"
-                title="Copy prompt"
-              >
-                <Copy className="w-4 h-4" />
-              </button>
-              <button
-                onClick={toggleFullscreen}
-                className="btn btn-secondary px-3 py-2"
-                title="Fullscreen"
-              >
-                <Maximize2 className="w-4 h-4" />
-              </button>
-              <button
-                onClick={handleDownload}
-                className="btn btn-primary px-3 py-2"
-                title="Download"
-              >
-                <Download className="w-4 h-4" />
-              </button>
+      {currentImage ? (
+        <ImageWorkspace
+          currentImage={currentImage}
+          versions={imageVersions.length > 0 ? imageVersions : mockVersions}
+          onVersionSelect={handleVersionSelect}
+          onVersionDelete={handleVersionDelete}
+          onVersionFavorite={handleVersionFavorite}
+          onImageDownload={handleImageDownload}
+          onImageShare={handleImageShare}
+        />
+      ) : (
+        <div className="bg-white rounded-lg shadow-sm border p-8">
+          <div className="flex items-center justify-center h-96">
+            <div className="text-center">
+              <Settings className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+              <p className="text-gray-500 font-medium">
+                No image generated yet
+              </p>
+              <p className="text-gray-400 text-sm">
+                Use the panel on the left to generate your first image
+              </p>
             </div>
-          )}
+          </div>
         </div>
+      )}
 
-        {/* Image Container */}
-        <div className="relative">
-          {displayImage ? (
-            <div className="relative group">
-              <img
-                src={getImageUrl(displayImage.image_path)}
-                alt="Generated"
-                className={`w-full rounded-lg shadow-lg transition-all duration-200 ${
-                  isFullscreen ? 'fixed inset-4 z-50 object-contain bg-black bg-opacity-90' : 'max-h-[600px] object-contain'
-                }`}
-                onClick={toggleFullscreen}
-              />
-              
-              {/* Overlay info */}
-              <div className="absolute top-2 right-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-sm opacity-0 group-hover:opacity-100 transition-opacity">
-                {displayImage.parameters?.width} × {displayImage.parameters?.height}
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-center justify-center h-96 bg-gray-100 rounded-lg border-2 border-dashed border-gray-300">
-              <div className="text-center">
-                <Settings className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                <p className="text-gray-500 font-medium">No image generated yet</p>
-                <p className="text-gray-400 text-sm">Use the panel on the left to generate your first image</p>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Generation Info */}
+      {/* Generation Details (when image exists) */}
       {displayImage && (
-        <div className="card p-4">
-          <h3 className="font-semibold text-gray-900 mb-3">Generation Details</h3>
-          
+        <div className="bg-white rounded-lg shadow-sm border p-6">
+          <h3 className="font-semibold text-gray-900 mb-4">
+            Generation Details
+          </h3>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
+            <div className="space-y-3">
               <div className="flex justify-between">
                 <span className="text-sm text-gray-600">Generation Time:</span>
                 <span className="text-sm font-medium flex items-center">
@@ -136,14 +163,15 @@ const ImageDisplay: React.FC<ImageDisplayProps> = () => {
                   {displayImage.generation_time?.toFixed(1)}s
                 </span>
               </div>
-              
+
               <div className="flex justify-between">
                 <span className="text-sm text-gray-600">Dimensions:</span>
                 <span className="text-sm font-medium">
-                  {displayImage.parameters?.width} × {displayImage.parameters?.height}
+                  {displayImage.parameters?.width} ×{" "}
+                  {displayImage.parameters?.height}
                 </span>
               </div>
-              
+
               <div className="flex justify-between">
                 <span className="text-sm text-gray-600">Steps:</span>
                 <span className="text-sm font-medium">
@@ -151,76 +179,59 @@ const ImageDisplay: React.FC<ImageDisplayProps> = () => {
                 </span>
               </div>
             </div>
-            
-            <div className="space-y-2">
+
+            <div className="space-y-3">
               <div className="flex justify-between">
                 <span className="text-sm text-gray-600">CFG Scale:</span>
                 <span className="text-sm font-medium">
                   {displayImage.parameters?.cfg_scale}
                 </span>
               </div>
-              
+
               <div className="flex justify-between">
                 <span className="text-sm text-gray-600">Seed:</span>
                 <span className="text-sm font-medium">
                   {displayImage.parameters?.seed}
                 </span>
               </div>
-              
+
               <div className="flex justify-between">
                 <span className="text-sm text-gray-600">Enhanced:</span>
                 <span className="text-sm font-medium">
-                  {displayImage.parameters?.enhance_prompt ? 'Yes' : 'No'}
+                  {displayImage.parameters?.enhance_prompt ? "Yes" : "No"}
                 </span>
               </div>
             </div>
           </div>
-          
+
           {/* Prompt Display */}
           {displayImage.parameters?.prompt && (
-            <div className="mt-4 pt-4 border-t">
+            <div className="mt-6 pt-4 border-t">
               <div className="mb-2">
-                <span className="text-sm font-medium text-gray-700">Prompt:</span>
+                <span className="text-sm font-medium text-gray-700">
+                  Prompt:
+                </span>
               </div>
-              <div className="bg-gray-50 p-3 rounded border text-sm text-gray-700">
+              <div className="bg-gray-50 p-3 rounded-lg border text-sm text-gray-700">
                 {displayImage.parameters.prompt}
               </div>
             </div>
           )}
-          
+
           {/* Negative Prompt */}
           {displayImage.parameters?.negative_prompt && (
-            <div className="mt-3">
+            <div className="mt-4">
               <div className="mb-2">
-                <span className="text-sm font-medium text-gray-700">Negative Prompt:</span>
+                <span className="text-sm font-medium text-gray-700">
+                  Negative Prompt:
+                </span>
               </div>
-              <div className="bg-red-50 p-3 rounded border text-sm text-gray-700">
+              <div className="bg-red-50 p-3 rounded-lg border text-sm text-gray-700">
                 {displayImage.parameters.negative_prompt}
               </div>
             </div>
           )}
         </div>
-      )}
-
-      {/* Recent Generations */}
-      <div className="card p-4">
-        <h3 className="font-semibold text-gray-900 mb-3">Recent Generations</h3>
-        <div className="grid grid-cols-3 gap-3">
-          {/* Placeholder for recent images */}
-          {[1, 2, 3].map(i => (
-            <div key={i} className="aspect-square bg-gray-100 rounded border-2 border-dashed border-gray-300 flex items-center justify-center">
-              <span className="text-gray-400 text-xs">Empty</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Fullscreen Overlay */}
-      {isFullscreen && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-90 z-40"
-          onClick={toggleFullscreen}
-        />
       )}
     </div>
   );

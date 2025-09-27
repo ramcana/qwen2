@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Qwen-Image Generator</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
+          sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect } = React;
+
+      const API_BASE = "http://localhost:8000";
+
+      function App() {
+        const [mode, setMode] = useState("generate"); // generate, edit, inpaint, outpaint, style
+        const [prompt, setPrompt] = useState(
+          'A beautiful sunset over mountains with text "Hello World" in elegant font'
+        );
+        const [negativePrompt, setNegativePrompt] = useState(
+          "blurry, low quality, distorted"
+        );
+        const [width, setWidth] = useState(512);
+        const [height, setHeight] = useState(512);
+        const [steps, setSteps] = useState(20);
+        const [cfgScale, setCfgScale] = useState(7.0);
+        const [strength, setStrength] = useState(0.8);
+        const [isGenerating, setIsGenerating] = useState(false);
+        const [status, setStatus] = useState("");
+        const [generatedImage, setGeneratedImage] = useState(null);
+        const [apiHealth, setApiHealth] = useState(null);
+        const [inputImage, setInputImage] = useState(null);
+        const [maskImage, setMaskImage] = useState(null);
+        const [styleImage, setStyleImage] = useState(null);
+
+        useEffect(() => {
+          checkApiHealth();
+        }, []);
+
+        const checkApiHealth = async () => {
+          try {
+            const response = await fetch(`${API_BASE}/health`);
+            const health = await response.json();
+            setApiHealth(health);
+          } catch (error) {
+            setApiHealth({ error: "API not available" });
+          }
+        };
+
+        const generateImage = async () => {
+          setIsGenerating(true);
+          setStatus("Starting generation...");
+          setGeneratedImage(null);
+
+          try {
+            // Start generation with new DiffSynth API
+            const response = await fetch(
+              `${API_BASE}/api/generate/text-to-image`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  prompt,
+                  negative_prompt: negativePrompt,
+                  width,
+                  height,
+                  steps,
+                  cfg_scale: cfgScale,
+                  seed: 42,
+                }),
+              }
+            );
+
+            const result = await response.json();
+
+            if (result.job_id) {
+              setStatus("Generation started! Monitoring progress...");
+              await pollForCompletion(result.job_id);
+            } else {
+              throw new Error("Failed to start generation");
+            }
+          } catch (error) {
+            setStatus(`Error: ${error.message}`);
+          } finally {
+            setIsGenerating(false);
+          }
+        };
+
+        const pollForCompletion = async (jobId) => {
+          const pollInterval = setInterval(async () => {
+            try {
+              const response = await fetch(`${API_BASE}/api/jobs/${jobId}`);
+              const job = await response.json();
+
+              if (!job) {
+                clearInterval(pollInterval);
+                setStatus("Job not found");
+                return;
+              }
+
+              setStatus(
+                `Status: ${job.status} (${(job.progress * 100).toFixed(0)}%)`
+              );
+
+              if (job.status === "completed") {
+                clearInterval(pollInterval);
+                setStatus(
+                  `✅ Generation completed in ${job.result.processing_time?.toFixed(
+                    1
+                  )}s`
+                );
+                setGeneratedImage({
+                  url: `${API_BASE}${job.result.image_url}`,
+                  time: job.result.processing_time,
+                });
+              } else if (job.status === "failed") {
+                clearInterval(pollInterval);
+                setStatus(`❌ Generation failed: ${job.error}`);
+              }
+            } catch (error) {
+              clearInterval(pollInterval);
+              setStatus(`Error polling status: ${error.message}`);
+            }
+          }, 2000);
+        };
+
+        return (
+          <div className="min-h-screen bg-gray-50 py-8">
+            <div className="max-w-4xl mx-auto px-4">
+              <div className="bg-white rounded-lg shadow-lg p-8">
+                <h1 className="text-3xl font-bold text-gray-900 mb-8 text-center">
+                  🎨 Qwen-Image Generator
+                </h1>
+
+                {/* API Status */}
+                <div className="mb-6 p-4 rounded-lg bg-gray-100">
+                  <h3 className="font-semibold mb-2">API Status:</h3>
+                  {apiHealth ? (
+                    apiHealth.error ? (
+                      <span className="text-red-600">❌ {apiHealth.error}</span>
+                    ) : (
+                      <div className="space-y-1">
+                        <div className="text-green-600">
+                          ✅ {apiHealth.status}
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          DiffSynth:{" "}
+                          {apiHealth.services?.diffsynth?.status || "unknown"} |
+                          GPU:{" "}
+                          {apiHealth.gpu?.available
+                            ? "Available"
+                            : "Not Available"}
+                        </div>
+                      </div>
+                    )
+                  ) : (
+                    <span className="text-gray-600">Checking...</span>
+                  )}
+                </div>
+
+                {/* Generation Form */}
+                <div className="space-y-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Prompt
+                    </label>
+                    <textarea
+                      value={prompt}
+                      onChange={(e) => setPrompt(e.target.value)}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      rows="3"
+                      placeholder="Describe the image you want to generate..."
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Negative Prompt
+                    </label>
+                    <textarea
+                      value={negativePrompt}
+                      onChange={(e) => setNegativePrompt(e.target.value)}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      rows="2"
+                      placeholder="What to avoid in the image..."
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Width
+                      </label>
+                      <input
+                        type="number"
+                        value={width}
+                        onChange={(e) => setWidth(parseInt(e.target.value))}
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        min="512"
+                        max="2048"
+                        step="64"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Height
+                      </label>
+                      <input
+                        type="number"
+                        value={height}
+                        onChange={(e) => setHeight(parseInt(e.target.value))}
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        min="512"
+                        max="2048"
+                        step="64"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Steps
+                      </label>
+                      <input
+                        type="number"
+                        value={steps}
+                        onChange={(e) => setSteps(parseInt(e.target.value))}
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        min="10"
+                        max="100"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        CFG Scale
+                      </label>
+                      <input
+                        type="number"
+                        value={cfgScale}
+                        onChange={(e) =>
+                          setCfgScale(parseFloat(e.target.value))
+                        }
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        min="1.0"
+                        max="20.0"
+                        step="0.1"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={generateImage}
+                    disabled={isGenerating}
+                    className={`w-full py-4 px-6 rounded-lg font-semibold text-white transition-colors ${
+                      isGenerating
+                        ? "bg-gray-400 cursor-not-allowed"
+                        : "bg-blue-600 hover:bg-blue-700"
+                    }`}
+                  >
+                    {isGenerating ? "🔄 Generating..." : "🎨 Generate Image"}
+                  </button>
+                </div>
+
+                {/* Status */}
+                {status && (
+                  <div className="mt-6 p-4 rounded-lg bg-blue-50 border border-blue-200">
+                    <p className="text-blue-800">{status}</p>
+                  </div>
+                )}
+
+                {/* Generated Image */}
+                {generatedImage && (
+                  <div className="mt-8 text-center">
+                    <h3 className="text-xl font-semibold mb-4">
+                      Generated Image
+                    </h3>
+                    <img
+                      src={generatedImage.url}
+                      alt="Generated"
+                      className="max-w-full mx-auto rounded-lg shadow-lg"
+                    />
+                    <p className="mt-4 text-gray-600">
+                      Generation time: {generatedImage.time?.toFixed(1)}s
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      ReactDOM.render(<App />, document.getElementById("root"));
+    </script>
+  </body>
+</html>

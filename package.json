@@ -1,0 +1,23 @@
+{
+    "name": "qwen2-project",
+    "version": "1.0.0",
+    "description": "Qwen2 Image Generation Project",
+    "scripts": {
+        "test:frontend": "npm --prefix ./frontend test -- --watchAll=false",
+        "test:frontend:error-boundary": "npm --prefix ./frontend test -- --watchAll=false --testPathPattern=DiffSynthErrorBoundary",
+        "test:frontend:fallback": "npm --prefix ./frontend test -- --watchAll=false --testPathPattern=DiffSynthFallbackUI",
+        "test:backend": "python -m pytest tests/ -v",
+        "test:all": "npm run test:backend && npm run test:frontend",
+        "dev:frontend": "npm --prefix ./frontend start",
+        "build:frontend": "npm --prefix ./frontend run build"
+    },
+    "keywords": [
+        "qwen",
+        "image-generation",
+        "ai",
+        "react",
+        "python"
+    ],
+    "author": "Your Name",
+    "license": "MIT"
+}

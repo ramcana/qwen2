@@ -1,17 +1,26 @@
-# Dockerfile for Qwen-Image API Server
+# Dockerfile for Qwen-Image API Server with DiffSynth Enhanced UI
 FROM python:3.10-slim
 
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app/src
+ENV HF_HOME=/app/cache/huggingface
+ENV TORCH_HOME=/app/cache/torch
 
-# Install system dependencies
+# Install system dependencies including DiffSynth requirements
 RUN apt-get update && apt-get install -y \
     git \
     wget \
     curl \
     build-essential \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Create app directory
@@ -23,11 +32,20 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source code
 COPY src/ ./src/
+COPY configs/ ./configs/
+COPY models/ ./models/
 COPY generated_images/ ./generated_images/
 COPY uploads/ ./uploads/
+COPY cache/ ./cache/
 
-# Create directories
-RUN mkdir -p /app/generated_images /app/uploads
+# Create directories for DiffSynth Enhanced UI
+RUN mkdir -p /app/generated_images \
+             /app/uploads \
+             /app/cache/huggingface \
+             /app/cache/torch \
+             /app/models/diffsynth \
+             /app/models/controlnet \
+             /app/offload
 
 # Expose port
 EXPOSE 8000

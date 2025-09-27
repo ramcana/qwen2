@@ -1,0 +1,63 @@
+# Prometheus Configuration for DiffSynth Enhanced UI Monitoring
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "rules/*.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - alertmanager:9093
+
+scrape_configs:
+  # Prometheus itself
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # API Server metrics
+  - job_name: "qwen-api"
+    static_configs:
+      - targets: ["api:8000"]
+    metrics_path: "/metrics"
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # Node Exporter (system metrics)
+  - job_name: "node-exporter"
+    static_configs:
+      - targets: ["node-exporter:9100"]
+
+  # NVIDIA GPU metrics (if available)
+  - job_name: "nvidia-gpu"
+    static_configs:
+      - targets: ["nvidia-gpu-exporter:9445"]
+    scrape_interval: 10s
+
+  # Redis metrics
+  - job_name: "redis"
+    static_configs:
+      - targets: ["redis-exporter:9121"]
+
+  # Traefik metrics
+  - job_name: "traefik"
+    static_configs:
+      - targets: ["traefik:8080"]
+    metrics_path: "/metrics"
+
+  # Custom application metrics
+  - job_name: "diffsynth-metrics"
+    static_configs:
+      - targets: ["api:8000"]
+    metrics_path: "/diffsynth/metrics"
+    scrape_interval: 30s
+
+  - job_name: "controlnet-metrics"
+    static_configs:
+      - targets: ["api:8000"]
+    metrics_path: "/controlnet/metrics"
+    scrape_interval: 30s

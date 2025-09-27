@@ -13,8 +13,8 @@ def main():
     print("=" * 50)
     
     # Check if we're in the right directory
-    if not os.path.exists("src/api_server.py"):
-        print("❌ Error: src/api_server.py not found")
+    if not os.path.exists("src/api_server_diffsynth.py"):
+        print("❌ Error: src/api_server_diffsynth.py not found")
         print("💡 Make sure you're in the project root directory")
         sys.exit(1)
     
@@ -28,7 +28,8 @@ def main():
     print("   • Traefik Access: http://api.localhost (if using Docker)")
     print("   • API Docs: http://localhost:8000/docs")
     print("   • Performance: RTX 4080 optimized")
-    print("   • Model: Qwen-Image (loads on first request)")
+    print("   • Services: DiffSynth + ControlNet + Qwen-Image")
+    print("   • Models: Load on first request")
     print("")
     
     print("🎯 Starting server...")
@@ -36,10 +37,10 @@ def main():
     print("")
     
     try:
-        # Start the API server
+        # Start the DiffSynth API server
         subprocess.run([
             sys.executable, 
-            "src/api_server.py"
+            "src/api_server_diffsynth.py"
         ])
     except KeyboardInterrupt:
         print("\n👋 Server stopped")

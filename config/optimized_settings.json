@@ -1,0 +1,58 @@
+{
+  "model_settings": {
+    "model_name": "Qwen/Qwen-Image",
+    "torch_dtype": "float16",
+    "trust_remote_code": true,
+    "low_cpu_mem_usage": true
+  },
+  "memory_optimizations": {
+    "enable_attention_slicing": true,
+    "enable_vae_slicing": true,
+    "enable_vae_tiling": true,
+    "enable_model_cpu_offload": true,
+    "enable_sequential_cpu_offload": false
+  },
+  "generation_presets": {
+    "fast": {
+      "width": 512,
+      "height": 512,
+      "num_inference_steps": 8,
+      "guidance_scale": 2.5,
+      "description": "Fast generation for testing"
+    },
+    "balanced": {
+      "width": 512,
+      "height": 512,
+      "num_inference_steps": 15,
+      "guidance_scale": 3.5,
+      "description": "Balanced speed/quality"
+    },
+    "quality": {
+      "width": 768,
+      "height": 768,
+      "num_inference_steps": 20,
+      "guidance_scale": 4.0,
+      "description": "Higher quality (uses more memory)"
+    },
+    "max_quality": {
+      "width": 1024,
+      "height": 1024,
+      "num_inference_steps": 25,
+      "guidance_scale": 4.5,
+      "description": "Maximum quality (may exceed memory)"
+    }
+  },
+  "hardware_limits": {
+    "gpu_memory_gb": 16,
+    "recommended_max_resolution": "768x768",
+    "safe_max_resolution": "512x512",
+    "max_batch_size": 1
+  },
+  "performance_tips": [
+    "Use 512x512 resolution for best performance",
+    "Enable all memory optimizations",
+    "Use 8-15 inference steps for speed",
+    "Clear GPU memory between generations",
+    "Monitor memory usage to avoid overflow"
+  ]
+}

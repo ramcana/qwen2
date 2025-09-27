@@ -26,7 +26,7 @@ class IntegrationTestSuite:
     
     def __init__(self):
         self.api_url = "http://localhost:8000"
-        self.react_url = "http://localhost:3000"
+        self.react_url = "http://localhost:3001"
         self.gradio_url = "http://localhost:7860"
         self.test_results = {}
         self.performance_metrics = {}

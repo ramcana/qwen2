@@ -72,7 +72,7 @@ def main():
             sys.exit(1)
     
     print("📋 Frontend Configuration:")
-    print("   • Development Server: http://localhost:3000")
+    print("   • Development Server: http://localhost:3001")
     print("   • Traefik Access: http://qwen.localhost (if using Docker)")
     print("   • API Backend: http://localhost:8000")
     print("   • Hot Reload: Enabled")

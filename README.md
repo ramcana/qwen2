@@ -1,19 +1,33 @@
-# Qwen-Image Local Generator 🎨
+# DiffSynth Enhanced Image Generation System 🎨
 
-A professional image editing system using the Qwen-Image-Edit model, optimized for high-end hardware with local deployment capabilities.
+A comprehensive AI image generation and editing system combining Qwen-Image models with DiffSynth-Studio capabilities, featuring multiple frontends and optimized for high-end hardware.
 
-> **🚀 New Setup**: One-command installation with Python 3.11, resumable downloads, and comprehensive testing. Run `make setup` to get started!
+> **🚀 Latest**: Enhanced with DiffSynth-Studio integration, multiple frontend options, and organized project structure. Full CORS support for seamless web interface experience.
 
 ## ✨ Features
 
-- **🎯 Advanced Image Editing**: Specialized Qwen-Image-Edit pipeline for precise image modifications
+### Core Capabilities
+
+- **🎯 Advanced Image Generation**: Text-to-image, image-to-image, inpainting, outpainting
+- **🎨 DiffSynth Integration**: Professional-grade image editing with DiffSynth-Studio
+- **🎛️ ControlNet Support**: Precise control over generation with various control types
 - **🌍 Multi-language Support**: English and Chinese text generation
 - **⚡ Hardware Optimized**: Specifically tuned for RTX 4080 + CUDA 12.1 setup
-- **🎨 Professional UI**: Complete Gradio web interface with advanced controls
+
+### User Interfaces
+
+- **🌐 Multiple Frontend Options**: Clean, Enhanced, Simple, and Docker-optimized HTML interfaces
+- **⚙️ FastAPI Backend**: RESTful API with comprehensive endpoints
+- **🔄 Real-time Progress**: Job tracking and progress monitoring
+- **📱 Responsive Design**: Works on desktop and mobile devices
+
+### Technical Features
+
 - **🔒 Local Deployment**: No cloud dependencies, complete privacy
 - **📊 Metadata Management**: Automatic saving of generation parameters
-- **🎛️ Multiple Presets**: Quality, aspect ratio, and style presets
 - **🔄 Resumable Downloads**: Smart model downloading with automatic resume
+- **🛡️ CORS Support**: Seamless cross-origin requests for web interfaces
+- **🧪 Comprehensive Testing**: Automated testing suite with integration tests
 
 ## 🖥️ System Requirements
 
@@ -33,159 +47,239 @@ A professional image editing system using the Qwen-Image-Edit model, optimized f
 
 ## 🚀 Quick Start
 
-### **One-Time Setup**
+### **Initial Setup**
 
 ```bash
-# Complete setup: Python 3.11 venv + dependencies + PyTorch + models
-make setup
-```
+# 1. Clone the repository
+git clone https://github.com/your-username/qwen2.git
+cd qwen2
 
-### **Daily Use (After Setup)**
+# 2. Clone DiffSynth-Studio (required dependency)
+git clone https://github.com/modelscope/DiffSynth-Studio.git
 
-```bash
-# Turn ON development environment
-./dev-start.sh
-
-# Launch UI for image editing
-./dev-ui.sh
-
-# Turn OFF when done
-./dev-stop.sh
-```
-
-This will:
-
-- ✅ Create Python 3.11 virtual environment (`.venv311/`)
-- ✅ Install all dependencies with pinned versions
-- ✅ Install PyTorch with CUDA 12.1 support
-- ✅ Download Qwen-Image-Edit model (~20GB)
-
-### **Manual Setup (Step by Step)**
-
-```bash
-# 1. Create environment
-make venv
-
-# 2. Install dependencies
-make deps
-
-# 3. Install PyTorch with CUDA
-make torch
-
-# 4. Download models
-make models
-```
-
-### **Launch Application**
-
-```bash
-# Activate environment
+# 3. Create Python 3.11 virtual environment
+python3.11 -m venv .venv311
 source .venv311/bin/activate
 
-# Start Gradio UI
-make ui
-# or: python src/qwen_image_ui.py
+# 4. Install dependencies
+pip install -r requirements.txt
 
-# Start main application
-make run
-# or: python start.py
+# 5. Install DiffSynth-Studio
+cd DiffSynth-Studio
+pip install -e .
+cd ..
 ```
+
+### **Launch the System**
+
+```bash
+# Start the enhanced API server
+python src/api_server_diffsynth.py
+
+# In another terminal, start the frontend server
+python serve_frontend.py
+
+# Access the web interface at:
+# http://localhost:3001/frontend/html/clean_frontend.html
+```
+
+### **Alternative: Full System Startup**
+
+```bash
+# Start everything with one command
+./start-full-system.sh
+
+# Stop everything
+./stop-full-system.sh
+```
+
+### **Available Frontends**
+
+Choose the interface that best fits your needs:
+
+1. **Clean Frontend** (Recommended):
+
+   ```
+   http://localhost:3001/frontend/html/clean_frontend.html
+   ```
+
+   - Modern, clean design
+   - All features supported
+   - Real-time progress tracking
+
+2. **Enhanced Frontend**:
+
+   ```
+   http://localhost:3001/frontend/html/enhanced_frontend.html
+   ```
+
+   - Feature-rich interface
+   - Advanced controls
+   - React-based components
+
+3. **Simple Frontend**:
+
+   ```
+   http://localhost:3001/frontend/html/simple_frontend.html
+   ```
+
+   - Minimal, fast interface
+   - Basic functionality
+   - Quick testing
+
+4. **Docker Frontend**:
+   ```
+   http://localhost:3001/frontend/html/docker_frontend.html
+   ```
+   - Optimized for containerized deployment
+   - Production-ready
 
 ### **Development Commands**
 
 ```bash
-# Run smoke test
-make smoke
+# Test the system
+python tools/quick_test.py
 
-# Format code
-make format
+# Run frontend tests
+./scripts/run-frontend-tests.sh
 
-# Run linting
-make lint
+# Debug performance issues
+python tools/debug/debug_performance_issues.py
 
-# Clean up
-make clean
+# Check model information
+python tools/debug/check_model_info.py
 
-# See all commands
-make help
+# Start/stop full system
+./start-full-system.sh
+./stop-full-system.sh
 ```
 
 ## 📁 Project Structure
 
 ```
 qwen2/
-├── .venv311/              # Python 3.11 virtual environment
-├── src/                   # Main application code
-│   ├── qwen_image_ui.py  # Gradio web interface
-│   ├── qwen_generator.py # Core generation logic
-│   ├── qwen_image_config.py # Configuration settings
-│   ├── utils/            # Utility modules
-│   └── presets/          # Preset configurations
-├── scripts/              # Automation scripts
-│   ├── setup_env.sh      # Environment setup
-│   ├── setup_models.sh   # Model download
-│   └── activate.sh       # Quick activation
-├── tools/                # Development tools
-│   ├── download_models.py # Resumable model downloader
-│   ├── test_device.py    # Device diagnostics
-│   └── emergency_device_fix.py # Emergency repairs
-├── examples/             # Example scripts
-│   └── qwen_edit_smoke.py # End-to-end test
-├── models/               # Downloaded models
-│   └── Qwen-Image-Edit/  # Main model (~20GB)
-├── generated_images/     # Output directory
-├── docs/                 # Documentation
-├── tests/                # Test suite
-├── Makefile             # Development shortcuts
-├── SETUP.md             # Detailed setup guide
-└── requirements.txt     # Pinned dependencies
+├── .venv311/                    # Python 3.11 virtual environment
+├── src/                         # Main application code
+│   ├── api_server_diffsynth.py  # Enhanced DiffSynth API server
+│   ├── api_server.py            # Original Qwen API server
+│   ├── diffsynth_service.py     # DiffSynth integration service
+│   ├── controlnet_service.py    # ControlNet integration
+│   ├── qwen_generator.py        # Core Qwen generation logic
+│   └── utils/                   # Utility modules
+├── frontend/                    # Web interfaces
+│   ├── html/                    # HTML frontend files
+│   │   ├── clean_frontend.html  # Clean, modern interface
+│   │   ├── enhanced_frontend.html # Feature-rich interface
+│   │   ├── simple_frontend.html # Basic interface
+│   │   └── docker_frontend.html # Docker-optimized interface
+│   └── src/                     # React frontend (if using)
+├── tests/                       # Test suite
+│   ├── frontend/                # Frontend tests
+│   │   ├── simple_test.html     # Basic API tests
+│   │   ├── test_connection.html # Connection tests
+│   │   └── test_ui.html         # UI tests
+│   └── *.py                     # Python test files
+├── tools/                       # Development tools
+│   ├── debug/                   # Debug utilities
+│   │   ├── debug_performance_issues.py
+│   │   ├── check_model_info.py
+│   │   └── check_model_size.py
+│   └── quick_test.py            # Quick system test
+├── scripts/                     # Automation scripts
+│   ├── setup/                   # Setup scripts
+│   │   ├── setup_ubuntu_native.sh
+│   │   └── diffsynth_qwen_setup.py
+│   ├── fix-frontend.sh          # Frontend fixes
+│   └── run-frontend-tests.sh    # Frontend testing
+├── docs/                        # Documentation
+│   ├── troubleshooting/         # Troubleshooting guides
+│   │   ├── WSL_CRASH_ANALYSIS.md
+│   │   ├── CACHE_FIX_SUMMARY.md
+│   │   └── SOLUTION.md
+│   ├── DAILY_WORKFLOW.md        # Daily usage guide
+│   └── integration_plan.md      # Integration documentation
+├── config/                      # Configuration files
+│   ├── docker/                  # Docker configurations
+│   │   ├── docker-compose.prod.yml
+│   │   ├── traefik.yml
+│   │   └── nginx.conf
+│   └── *.json                   # JSON config files
+├── DiffSynth-Studio/            # External dependency (git clone)
+├── models/                      # Downloaded models
+├── generated_images/            # Output directory
+├── serve_frontend.py            # Frontend server utility
+├── start-full-system.sh         # System startup script
+├── stop-full-system.sh          # System shutdown script
+└── requirements.txt             # Pinned dependencies
 ```
 
 ## 💡 Usage Examples
 
-### Quick Test
+### Web Interface Usage
 
-```bash
-# Run end-to-end smoke test
-make smoke
-# This creates a test image with "Add a red kite flying in the sky"
-```
+1. **Access the Clean Frontend**:
 
-### Basic Image Editing
+   ```
+   http://localhost:3001/frontend/html/clean_frontend.html
+   ```
+
+2. **Generate Images**:
+
+   - Enter your prompt: "A beautiful sunset over mountains"
+   - Adjust parameters (width, height, steps, CFG scale)
+   - Click "Generate Image"
+   - Monitor progress in real-time
+
+3. **Image Editing**:
+   - Upload an input image
+   - Select edit mode (Edit, Inpaint, Outpaint, Style Transfer)
+   - Enter editing prompt
+   - Generate enhanced image
+
+### API Usage
 
 ```python
-from diffusers import QwenImageEditPipeline
+import requests
+import base64
 from PIL import Image
-import torch
+import io
 
-# Load pipeline
-pipe = QwenImageEditPipeline.from_pretrained(
-    "./models/Qwen-Image-Edit",
-    torch_dtype=torch.float16
-)
-pipe = pipe.to("cuda")
+# Text-to-Image Generation
+response = requests.post("http://localhost:8000/api/generate/text-to-image", json={
+    "prompt": "A beautiful sunset over mountains, digital art",
+    "negative_prompt": "blurry, low quality",
+    "width": 1024,
+    "height": 1024,
+    "steps": 20,
+    "cfg_scale": 7.0
+})
+
+job_id = response.json()["job_id"]
+
+# Monitor job progress
+while True:
+    status = requests.get(f"http://localhost:8000/api/jobs/{job_id}")
+    job = status.json()
+    if job["status"] == "completed":
+        image_url = job["result"]["image_url"]
+        break
+```
+
+### Image Editing with API
+
+```python
+# Convert image to base64
+with open("input.jpg", "rb") as f:
+    image_base64 = base64.b64encode(f.read()).decode()
 
 # Edit image
-image = Image.open("input.jpg")
-result = pipe(
-    prompt="Add a beautiful sunset in the background",
-    image=image
-).images[0]
-
-result.save("edited_image.jpg")
-```
-
-### Advanced Settings
-
-```python
-# High-quality editing with custom parameters
-result = pipe(
-    prompt="Transform this into a cyberpunk scene with neon lights",
-    image=image,
-    num_inference_steps=50,
-    guidance_scale=7.5,
-    strength=0.8
-).images[0]
+response = requests.post("http://localhost:8000/api/edit/image", json={
+    "prompt": "Add a rainbow in the sky",
+    "operation": "edit",
+    "image_base64": image_base64,
+    "strength": 0.8,
+    "steps": 20
+})
 ```
 
 ## ⚙️ Configuration
@@ -308,35 +402,38 @@ du -sh models/Qwen-Image-Edit/
 ### Documentation
 
 - 📖 **Setup Guide**: [`SETUP.md`](SETUP.md) - Comprehensive setup instructions
-- 🔧 **Device Issues**: `docs/DEVICE_ERROR_FIX.md`
-- 🌐 **UI Access**: `docs/UI_ACCESS_GUIDE.md`
-- 🖥️ **WSL2 Setup**: `docs/WSL2_BROWSER_SETUP.md`
+- 🔧 **Troubleshooting**: `docs/troubleshooting/` - Common issues and solutions
+- 🌐 **Daily Workflow**: `docs/DAILY_WORKFLOW.md` - Usage patterns
+- 📋 **Integration Plan**: `docs/integration_plan.md` - System architecture
 
 ### Performance Tips
 
-- **Use safe restart**: `./scripts/safe_restart.sh` prevents crashes
-- **Diagnostic tools**: Run `python tools/test_device.py` for health checks
-- Use bfloat16 precision for RTX 40-series GPUs
+- **Frontend Server**: Use `python serve_frontend.py` for optimal CORS handling
+- **API Health**: Check `http://localhost:8000/health` for system status
+- **Memory Management**: Monitor GPU usage via API endpoints
+- Use float16 precision for RTX 40-series GPUs
 - Enable attention slicing for memory efficiency
 - Keep VRAM usage under 14GB for stability
 
 ## 🚀 What's New
 
-### ✨ Latest Updates
+### ✨ Latest Updates (v3.0)
 
-- **🐍 Python 3.11 Environment**: Standardized setup with `.venv311/`
-- **📦 Pinned Dependencies**: Reproducible builds with exact versions
-- **🔄 Resumable Downloads**: Smart model downloading with auto-resume
-- **🛠️ Makefile Integration**: One-command setup and development shortcuts
-- **🧪 Smoke Testing**: Quick end-to-end pipeline validation
-- **📖 Comprehensive Docs**: Detailed setup guide in `SETUP.md`
+- **🎨 DiffSynth Integration**: Full DiffSynth-Studio integration with professional editing capabilities
+- **🌐 Multiple Frontends**: Clean, Enhanced, Simple, and Docker-optimized web interfaces
+- **⚙️ Enhanced API**: Comprehensive FastAPI backend with job tracking and progress monitoring
+- **🛡️ CORS Support**: Seamless cross-origin requests for web interfaces
+- **📁 Organized Structure**: Clean project organization with dedicated directories
+- **🧪 Comprehensive Testing**: Frontend and backend testing suites
 
 ### 🎯 Key Features
 
-- **Latest Diffusers**: Direct from GitHub with QwenImageEditPipeline
-- **CUDA 12.1 Optimized**: PyTorch 2.8.0+ with latest CUDA support
-- **Memory Efficient**: Optimized for RTX 4080 with 16GB VRAM
-- **Developer Friendly**: Integrated linting, formatting, and testing
+- **🔄 Real-time Progress**: Live job monitoring with progress updates
+- **🎛️ ControlNet Support**: Advanced control over image generation
+- **📱 Responsive Design**: Works on desktop and mobile devices
+- **🔒 Local Privacy**: All processing happens on your hardware
+- **⚡ Hardware Optimized**: Tuned for RTX 4080 + CUDA 12.1
+- **🛠️ Developer Friendly**: Organized codebase with comprehensive documentation
 
 ## 🤝 Contributing
 
@@ -359,7 +456,27 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ---
 
+## 🔗 Important Links
+
+- **API Documentation**: `http://localhost:8000/docs` (when server is running)
+- **Health Check**: `http://localhost:8000/health`
+- **DiffSynth-Studio**: [GitHub Repository](https://github.com/modelscope/DiffSynth-Studio)
+- **Frontend Server**: `http://localhost:3001`
+
+## 📋 Prerequisites
+
+Before starting, ensure you have:
+
+- **Git**: For cloning repositories
+- **Python 3.11**: Required for the virtual environment
+- **CUDA 12.1+**: For GPU acceleration
+- **16GB+ VRAM**: RTX 4080 or equivalent
+- **50GB+ Storage**: For models and generated images
+
+---
+
 **🎯 Hardware Optimized**: Specifically tuned for RTX 4080 + CUDA 12.1 setups  
 **🔒 Local Privacy**: All processing happens on your hardware  
-**⚡ Production Ready**: Professional-quality image editing pipeline  
-**🛠️ Developer Friendly**: Complete development environment with one command
+**⚡ Production Ready**: Professional-quality image generation and editing  
+**🌐 Web-First**: Modern web interfaces with real-time progress tracking  
+**🛠️ Developer Friendly**: Organized codebase with comprehensive testing
