@@ -7,14 +7,15 @@ Modern REST API backend for React frontend
 import asyncio
 import json
 import os
+import sys
 import time
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import torch
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -38,6 +39,12 @@ from diffsynth_models import (
 from controlnet_service import (
     ControlNetService, ControlNetType,
     ControlNetDetectionResult, ControlMapResult
+)
+
+# Import monitoring components
+from monitoring_config import (
+    monitoring_config, health_checker, metrics_collector,
+    HealthStatus, ServiceStatus
 )
 
 # Initialize FastAPI app
@@ -77,7 +84,7 @@ class GenerationRequest(BaseModel):
     aspect_ratio: str = "16:9"
 
 class ImageToImageRequest(GenerationRequest):
-    init_image_path: str
+    init_image_path: Optional[str] = None
     strength: float = 0.7
 
 class StatusResponse(BaseModel):
@@ -130,13 +137,15 @@ class ControlDetectionRequest(BaseModel):
     image_path: Optional[str] = None
     image_base64: Optional[str] = None
 
-# Global state for initialization
+# Global state for initialization and monitoring
+startup_time = time.time()
 initialization_status = {
     "status": "starting",
     "message": "API server starting...",
     "progress": 0,
     "model_loaded": False,
-    "error": None
+    "error": None,
+    "startup_time": startup_time
 }
 
 # Startup event
@@ -183,15 +192,317 @@ async def startup_event():
             "error": str(e)
         })
 
-# Health check endpoint
+# Health check endpoints
 @app.get("/health")
 async def health_check():
-    """Health check endpoint"""
-    return {
-        "status": "healthy",
-        "timestamp": datetime.now().isoformat(),
-        "model_loaded": generator is not None and generator.pipe is not None
-    }
+    """Basic health check endpoint for container orchestration"""
+    try:
+        # Check basic service health
+        health_status = {
+            "status": "healthy",
+            "timestamp": datetime.now().isoformat(),
+            "service": "qwen-api",
+            "version": "2.0.0"
+        }
+        
+        # Quick model availability check (non-blocking)
+        if generator is not None and generator.pipe is not None:
+            health_status["model_status"] = "loaded"
+        else:
+            health_status["model_status"] = "not_loaded"
+        
+        return health_status
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Health check failed: {str(e)}")
+
+@app.get("/health/detailed")
+async def detailed_health_check():
+    """Detailed health check with comprehensive system information"""
+    try:
+        health_data = {
+            "status": "healthy",
+            "timestamp": datetime.now().isoformat(),
+            "service": "qwen-api",
+            "version": "2.0.0",
+            "uptime": time.time() - startup_time if 'startup_time' in globals() else 0
+        }
+        
+        # Model status
+        health_data["models"] = {
+            "qwen_generator": {
+                "loaded": generator is not None and generator.pipe is not None,
+                "device": generator.device if generator else "unknown"
+            },
+            "diffsynth_service": {
+                "loaded": diffsynth_service is not None,
+                "enabled": os.getenv("ENABLE_DIFFSYNTH", "true").lower() == "true"
+            },
+            "controlnet_service": {
+                "loaded": controlnet_service is not None,
+                "enabled": os.getenv("ENABLE_CONTROLNET", "true").lower() == "true"
+            }
+        }
+        
+        # System resources
+        if torch.cuda.is_available():
+            try:
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+                
+                total_memory = torch.cuda.get_device_properties(0).total_memory
+                allocated_memory = torch.cuda.memory_allocated()
+                free_memory = total_memory - allocated_memory
+                
+                health_data["gpu"] = {
+                    "available": True,
+                    "device_name": torch.cuda.get_device_name(0),
+                    "memory_total_gb": round(total_memory / 1e9, 2),
+                    "memory_allocated_gb": round(allocated_memory / 1e9, 2),
+                    "memory_free_gb": round(free_memory / 1e9, 2),
+                    "memory_usage_percent": round((allocated_memory / total_memory) * 100, 1)
+                }
+            except Exception as e:
+                health_data["gpu"] = {"available": True, "error": str(e)}
+        else:
+            health_data["gpu"] = {"available": False}
+        
+        # Queue status
+        health_data["queue"] = {
+            "current_generation": current_generation,
+            "queue_length": len(generation_queue),
+            "active_jobs": len([job for job in generation_queue.values() if job["status"] == "processing"])
+        }
+        
+        # Initialization status
+        health_data["initialization"] = initialization_status.copy()
+        
+        # Disk space check for critical directories
+        import shutil
+        health_data["storage"] = {}
+        for directory in ["generated_images", "uploads", "cache"]:
+            try:
+                if os.path.exists(directory):
+                    total, used, free = shutil.disk_usage(directory)
+                    health_data["storage"][directory] = {
+                        "total_gb": round(total / 1e9, 2),
+                        "used_gb": round(used / 1e9, 2),
+                        "free_gb": round(free / 1e9, 2),
+                        "usage_percent": round((used / total) * 100, 1)
+                    }
+            except Exception as e:
+                health_data["storage"][directory] = {"error": str(e)}
+        
+        return health_data
+        
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Detailed health check failed: {str(e)}")
+
+@app.get("/health/ready")
+async def readiness_check():
+    """Readiness check for Kubernetes-style orchestration"""
+    try:
+        # Check if the service is ready to accept requests
+        ready_status = {
+            "status": "ready" if initialization_status.get("status") == "ready" else "not_ready",
+            "timestamp": datetime.now().isoformat(),
+            "service": "qwen-api"
+        }
+        
+        # Check critical dependencies
+        checks = {
+            "api_server": True,  # If we're responding, the API server is running
+            "model_initialized": generator is not None,
+            "directories_accessible": all(os.path.exists(d) for d in ["generated_images", "uploads"])
+        }
+        
+        ready_status["checks"] = checks
+        ready_status["ready"] = all(checks.values())
+        
+        if not ready_status["ready"]:
+            raise HTTPException(status_code=503, detail="Service not ready")
+        
+        return ready_status
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Readiness check failed: {str(e)}")
+
+@app.get("/health/live")
+async def liveness_check():
+    """Liveness check for Kubernetes-style orchestration"""
+    try:
+        # Simple liveness check - if we can respond, we're alive
+        return {
+            "status": "alive",
+            "timestamp": datetime.now().isoformat(),
+            "service": "qwen-api",
+            "pid": os.getpid()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Liveness check failed: {str(e)}")
+
+# Monitoring and metrics endpoints
+@app.get("/monitoring/health")
+async def comprehensive_health_check():
+    """Comprehensive health check with full system monitoring"""
+    try:
+        health_result = await health_checker.perform_health_check(
+            generator=generator,
+            diffsynth_service=diffsynth_service,
+            controlnet_service=controlnet_service,
+            generation_queue=generation_queue,
+            initialization_status=initialization_status
+        )
+        
+        # Collect metrics
+        await metrics_collector.collect_metrics(health_result)
+        
+        # Convert to dict for JSON response
+        response_data = {
+            "status": health_result.status.value,
+            "timestamp": health_result.timestamp.isoformat(),
+            "service_name": health_result.service_name,
+            "version": health_result.version,
+            "uptime_seconds": health_result.uptime_seconds,
+            "checks": health_result.checks,
+            "metrics": health_result.metrics,
+            "errors": health_result.errors,
+            "warnings": health_result.warnings
+        }
+        
+        # Set appropriate HTTP status code
+        if health_result.status == HealthStatus.UNHEALTHY:
+            raise HTTPException(status_code=503, detail=response_data)
+        elif health_result.status == HealthStatus.DEGRADED:
+            response_data["http_status"] = 200  # Still operational
+        
+        return response_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Health monitoring failed: {str(e)}")
+
+@app.get("/monitoring/metrics")
+async def get_metrics():
+    """Get current system metrics"""
+    try:
+        health_result = await health_checker.perform_health_check(
+            generator=generator,
+            diffsynth_service=diffsynth_service,
+            controlnet_service=controlnet_service,
+            generation_queue=generation_queue,
+            initialization_status=initialization_status
+        )
+        
+        return {
+            "timestamp": health_result.timestamp.isoformat(),
+            "metrics": health_result.metrics,
+            "uptime_seconds": health_result.uptime_seconds
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Metrics collection failed: {str(e)}")
+
+@app.get("/monitoring/metrics/summary")
+async def get_metrics_summary(hours: int = 1):
+    """Get metrics summary for specified time period"""
+    try:
+        if hours < 1 or hours > 24:
+            raise HTTPException(status_code=400, detail="Hours must be between 1 and 24")
+        
+        summary = metrics_collector.get_metrics_summary(hours=hours)
+        return summary
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Metrics summary failed: {str(e)}")
+
+@app.get("/monitoring/logs")
+async def get_recent_logs(lines: int = 100):
+    """Get recent log entries"""
+    try:
+        if lines < 1 or lines > 1000:
+            raise HTTPException(status_code=400, detail="Lines must be between 1 and 1000")
+        
+        log_file = monitoring_config.log_file
+        if not os.path.exists(log_file):
+            return {"logs": [], "message": "Log file not found"}
+        
+        # Read last N lines from log file
+        with open(log_file, 'r') as f:
+            all_lines = f.readlines()
+            recent_lines = all_lines[-lines:] if len(all_lines) > lines else all_lines
+        
+        # Parse JSON log entries
+        parsed_logs = []
+        for line in recent_lines:
+            try:
+                log_entry = json.loads(line.strip())
+                parsed_logs.append(log_entry)
+            except json.JSONDecodeError:
+                # Handle non-JSON log lines
+                parsed_logs.append({"message": line.strip(), "level": "INFO"})
+        
+        return {
+            "logs": parsed_logs,
+            "total_lines": len(parsed_logs),
+            "log_file": log_file
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Log retrieval failed: {str(e)}")
+
+@app.get("/monitoring/status")
+async def get_service_status():
+    """Get detailed service status information"""
+    try:
+        status_info = {
+            "service": "qwen-api",
+            "version": "2.0.0",
+            "status": initialization_status.get("status", "unknown"),
+            "startup_time": datetime.fromtimestamp(startup_time).isoformat(),
+            "uptime_seconds": time.time() - startup_time,
+            "environment": {
+                "python_version": sys.version,
+                "cuda_available": torch.cuda.is_available(),
+                "cuda_device_count": torch.cuda.device_count() if torch.cuda.is_available() else 0,
+                "environment_variables": {
+                    "ENABLE_DIFFSYNTH": os.getenv("ENABLE_DIFFSYNTH", "true"),
+                    "ENABLE_CONTROLNET": os.getenv("ENABLE_CONTROLNET", "true"),
+                    "MEMORY_OPTIMIZATION": os.getenv("MEMORY_OPTIMIZATION", "true"),
+                    "LOG_LEVEL": os.getenv("LOG_LEVEL", "INFO")
+                }
+            },
+            "services": {
+                "qwen_generator": {
+                    "loaded": generator is not None and getattr(generator, 'pipe', None) is not None,
+                    "device": generator.device if generator else "unknown"
+                },
+                "diffsynth_service": {
+                    "loaded": diffsynth_service is not None,
+                    "enabled": os.getenv("ENABLE_DIFFSYNTH", "true").lower() == "true"
+                },
+                "controlnet_service": {
+                    "loaded": controlnet_service is not None,
+                    "enabled": os.getenv("ENABLE_CONTROLNET", "true").lower() == "true"
+                }
+            },
+            "queue_info": {
+                "current_generation": current_generation,
+                "queue_length": len(generation_queue),
+                "active_jobs": len([job for job in generation_queue.values() if job.get("status") == "processing"]),
+                "completed_jobs": len([job for job in generation_queue.values() if job.get("status") == "completed"]),
+                "failed_jobs": len([job for job in generation_queue.values() if job.get("status") == "failed"])
+            }
+        }
+        
+        return status_info
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Status retrieval failed: {str(e)}")
 
 # Status endpoint
 @app.get("/status", response_model=StatusResponse)
@@ -391,18 +702,187 @@ async def process_text_to_image(job_id: str, request: GenerationRequest):
     finally:
         current_generation = None
 
-# Image-to-image generation
+async def process_image_to_image(job_id: str, request: ImageToImageRequest):
+    """Process image-to-image generation"""
+    global generator, current_generation, generation_queue
+    
+    current_generation = job_id
+    generation_queue[job_id]["status"] = "processing"
+    generation_queue[job_id]["started_at"] = datetime.now().isoformat()
+    
+    try:
+        start_time = time.time()
+        
+        # Load the init image
+        from PIL import Image
+        init_image = Image.open(request.init_image_path).convert('RGB')
+        
+        # Generate image using the generator's img2img method
+        image, message = generator.generate_img2img(
+            prompt=request.prompt,
+            init_image=init_image,
+            strength=request.strength,
+            negative_prompt=request.negative_prompt,
+            width=request.width,
+            height=request.height,
+            num_inference_steps=request.num_inference_steps,
+            cfg_scale=request.cfg_scale,
+            seed=request.seed,
+            language=request.language,
+            enhance_prompt_flag=request.enhance_prompt
+        )
+        
+        generation_time = time.time() - start_time
+        
+        if image is not None:
+            # Save image
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"api_img2img_{timestamp}_{job_id[:8]}.png"
+            image_path = os.path.join("generated_images", filename)
+            image.save(image_path)
+            
+            # Update queue
+            generation_queue[job_id].update({
+                "status": "completed",
+                "image_path": image_path,
+                "generation_time": generation_time,
+                "completed_at": datetime.now().isoformat(),
+                "message": message
+            })
+        else:
+            generation_queue[job_id].update({
+                "status": "failed",
+                "error": message,
+                "completed_at": datetime.now().isoformat()
+            })
+            
+    except Exception as e:
+        generation_queue[job_id].update({
+            "status": "failed",
+            "error": str(e),
+            "completed_at": datetime.now().isoformat()
+        })
+    finally:
+        current_generation = None
+        
+        # Clean up uploaded file if it exists
+        if "upload_path" in generation_queue[job_id]:
+            upload_path = generation_queue[job_id]["upload_path"]
+            try:
+                if os.path.exists(upload_path):
+                    os.remove(upload_path)
+            except Exception as e:
+                print(f"Warning: Could not clean up upload file {upload_path}: {e}")
+
+# Image-to-image generation with file upload
 @app.post("/generate/image-to-image", response_model=GenerationResponse)
-async def generate_image_to_image(request: ImageToImageRequest, background_tasks: BackgroundTasks):
-    """Generate image from image and text prompt"""
-    global generator
+async def generate_image_to_image(
+    prompt: str = Form(...),
+    negative_prompt: str = Form(""),
+    width: int = Form(1664),
+    height: int = Form(928),
+    num_inference_steps: int = Form(50),
+    cfg_scale: float = Form(4.0),
+    seed: int = Form(-1),
+    language: str = Form("en"),
+    enhance_prompt: bool = Form(True),
+    aspect_ratio: str = Form("16:9"),
+    strength: float = Form(0.7),
+    init_image: UploadFile = File(...),
+    background_tasks: BackgroundTasks = None
+):
+    """Generate image from image and text prompt with file upload"""
+    global generator, current_generation, generation_queue
     
     if generator is None or generator.pipe is None:
         raise HTTPException(status_code=400, detail="Model not loaded. Please initialize first.")
     
-    # For now, return not implemented
-    # This would need proper image upload handling
-    raise HTTPException(status_code=501, detail="Image-to-image not yet implemented in API")
+    # Validate uploaded file
+    if not init_image.content_type or not init_image.content_type.startswith('image/'):
+        raise HTTPException(status_code=400, detail="Uploaded file must be an image")
+    
+    try:
+        # Save uploaded image
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        upload_filename = f"upload_{timestamp}_{init_image.filename}"
+        upload_path = os.path.join("uploads", upload_filename)
+        
+        # Read and save the uploaded file
+        contents = await init_image.read()
+        with open(upload_path, "wb") as f:
+            f.write(contents)
+        
+        # Create request object
+        request = ImageToImageRequest(
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            width=width,
+            height=height,
+            num_inference_steps=num_inference_steps,
+            cfg_scale=cfg_scale,
+            seed=seed,
+            language=language,
+            enhance_prompt=enhance_prompt,
+            aspect_ratio=aspect_ratio,
+            strength=strength,
+            init_image_path=upload_path
+        )
+        
+        # Create job ID
+        job_id = str(uuid.uuid4())
+        
+        # Add to queue
+        generation_queue[job_id] = {
+            "status": "queued",
+            "request": request.dict(),
+            "created_at": datetime.now().isoformat(),
+            "type": "image-to-image",
+            "upload_path": upload_path
+        }
+        
+        # Start generation in background
+        background_tasks.add_task(process_image_to_image, job_id, request)
+        
+        return GenerationResponse(
+            success=True,
+            message="Image-to-image generation started",
+            job_id=job_id
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to process image upload: {str(e)}")
+
+# Alternative endpoint for image-to-image with existing file path
+@app.post("/generate/image-to-image-path", response_model=GenerationResponse)
+async def generate_image_to_image_path(request: ImageToImageRequest, background_tasks: BackgroundTasks):
+    """Generate image from image and text prompt using existing file path"""
+    global generator, current_generation, generation_queue
+    
+    if generator is None or generator.pipe is None:
+        raise HTTPException(status_code=400, detail="Model not loaded. Please initialize first.")
+    
+    if not request.init_image_path or not os.path.exists(request.init_image_path):
+        raise HTTPException(status_code=400, detail="Valid init_image_path is required")
+    
+    # Create job ID
+    job_id = str(uuid.uuid4())
+    
+    # Add to queue
+    generation_queue[job_id] = {
+        "status": "queued",
+        "request": request.dict(),
+        "created_at": datetime.now().isoformat(),
+        "type": "image-to-image"
+    }
+    
+    # Start generation in background
+    background_tasks.add_task(process_image_to_image, job_id, request)
+    
+    return GenerationResponse(
+        success=True,
+        message="Image-to-image generation started",
+        job_id=job_id
+    )
 
 # Get aspect ratios
 @app.get("/aspect-ratios")
@@ -425,6 +905,14 @@ async def cancel_job(job_id: str):
             return {"success": True, "message": "Job cancelled"}
         else:
             return {"success": False, "message": "Job cannot be cancelled"}
+    else:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+@app.get("/queue/{job_id}")
+async def get_job_status(job_id: str):
+    """Get status of a specific job"""
+    if job_id in generation_queue:
+        return {"job_id": job_id, **generation_queue[job_id]}
     else:
         raise HTTPException(status_code=404, detail="Job not found")
 

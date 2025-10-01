@@ -1,0 +1,254 @@
+{
+    "test_suites": {
+        "container_integration": {
+            "enabled": true,
+            "file": "test_docker_container_integration.py",
+            "timeout": 600,
+            "required": true,
+            "description": "Container integration and service communication tests",
+            "tags": [
+                "integration",
+                "networking",
+                "communication"
+            ],
+            "prerequisites": [
+                "docker",
+                "docker-compose"
+            ],
+            "resource_requirements": {
+                "memory_mb": 2048,
+                "cpu_cores": 2,
+                "disk_mb": 1024
+            }
+        },
+        "e2e_workflows": {
+            "enabled": true,
+            "file": "test_docker_e2e_workflows.py",
+            "timeout": 1200,
+            "required": true,
+            "description": "End-to-end workflow tests in Docker environment",
+            "tags": [
+                "e2e",
+                "workflow",
+                "user-journey"
+            ],
+            "prerequisites": [
+                "docker",
+                "docker-compose",
+                "built-images"
+            ],
+            "resource_requirements": {
+                "memory_mb": 4096,
+                "cpu_cores": 4,
+                "disk_mb": 2048
+            }
+        },
+        "performance_validation": {
+            "enabled": true,
+            "file": "test_docker_performance_validation.py",
+            "timeout": 900,
+            "required": false,
+            "description": "Performance and resource usage validation tests",
+            "tags": [
+                "performance",
+                "resource-usage",
+                "benchmarks"
+            ],
+            "prerequisites": [
+                "docker",
+                "docker-compose",
+                "built-images",
+                "gpu-optional"
+            ],
+            "resource_requirements": {
+                "memory_mb": 8192,
+                "cpu_cores": 4,
+                "disk_mb": 4096,
+                "gpu_memory_mb": 4096
+            }
+        }
+    },
+    "docker_setup": {
+        "cleanup_before": true,
+        "cleanup_after": true,
+        "build_images": true,
+        "pull_base_images": true,
+        "create_networks": true,
+        "create_volumes": true,
+        "base_images": [
+            "python:3.11-slim",
+            "node:18-alpine",
+            "nginx:alpine",
+            "traefik:v3.0",
+            "alpine:latest",
+            "redis:7-alpine"
+        ],
+        "build_configs": [
+            {
+                "name": "qwen-api",
+                "dockerfile": "Dockerfile.api",
+                "context": ".",
+                "target": "runtime",
+                "build_args": {
+                    "ENABLE_GPU": "true",
+                    "PYTHON_VERSION": "3.11"
+                }
+            },
+            {
+                "name": "qwen-frontend",
+                "dockerfile": "Dockerfile",
+                "context": "./frontend",
+                "build_args": {
+                    "NODE_ENV": "production",
+                    "BUILD_OPTIMIZATION": "true"
+                }
+            }
+        ]
+    },
+    "reporting": {
+        "generate_html_report": true,
+        "generate_json_report": true,
+        "save_logs": true,
+        "upload_artifacts": false,
+        "include_docker_logs": true,
+        "include_system_info": true,
+        "compress_artifacts": false
+    },
+    "thresholds": {
+        "min_success_rate": 0.8,
+        "max_test_duration": 2400,
+        "max_memory_usage_mb": 8192,
+        "max_cpu_usage_percent": 200,
+        "max_container_startup_time": 180,
+        "min_api_response_time_ms": 100,
+        "max_api_response_time_ms": 30000,
+        "max_image_generation_time": 120,
+        "min_concurrent_requests": 3,
+        "max_error_rate": 0.1
+    },
+    "environments": {
+        "development": {
+            "docker_compose_file": "docker-compose.dev.yml",
+            "resource_limits": {
+                "api_memory": "4G",
+                "frontend_memory": "512M",
+                "traefik_memory": "256M"
+            },
+            "test_data": {
+                "small_images": true,
+                "quick_tests": true,
+                "reduced_steps": 10
+            }
+        },
+        "staging": {
+            "docker_compose_file": "docker-compose.yml",
+            "resource_limits": {
+                "api_memory": "8G",
+                "frontend_memory": "1G",
+                "traefik_memory": "512M"
+            },
+            "test_data": {
+                "full_images": true,
+                "complete_tests": true,
+                "standard_steps": 20
+            }
+        },
+        "production": {
+            "docker_compose_file": "docker-compose.prod.yml",
+            "resource_limits": {
+                "api_memory": "16G",
+                "frontend_memory": "1G",
+                "traefik_memory": "512M"
+            },
+            "test_data": {
+                "full_images": true,
+                "stress_tests": true,
+                "high_quality_steps": 50
+            }
+        }
+    },
+    "test_data": {
+        "prompts": [
+            "A beautiful landscape with mountains",
+            "A cat sitting on a windowsill",
+            "Abstract art with vibrant colors",
+            "A futuristic city skyline",
+            "A peaceful forest scene"
+        ],
+        "image_sizes": [
+            {
+                "width": 256,
+                "height": 256
+            },
+            {
+                "width": 512,
+                "height": 512
+            },
+            {
+                "width": 768,
+                "height": 768
+            }
+        ],
+        "test_parameters": {
+            "quick": {
+                "num_inference_steps": 10,
+                "cfg_scale": 7.5,
+                "timeout": 30
+            },
+            "standard": {
+                "num_inference_steps": 20,
+                "cfg_scale": 7.5,
+                "timeout": 60
+            },
+            "high_quality": {
+                "num_inference_steps": 50,
+                "cfg_scale": 12.0,
+                "timeout": 180
+            }
+        }
+    },
+    "monitoring": {
+        "collect_metrics": true,
+        "metrics_interval": 5,
+        "monitor_containers": [
+            "qwen-api",
+            "qwen-frontend",
+            "qwen-traefik"
+        ],
+        "system_metrics": [
+            "cpu_usage",
+            "memory_usage",
+            "disk_usage",
+            "network_io",
+            "gpu_usage"
+        ],
+        "alert_thresholds": {
+            "high_memory_usage": 90,
+            "high_cpu_usage": 150,
+            "high_disk_usage": 85,
+            "container_restart": 3
+        }
+    },
+    "security": {
+        "scan_images": false,
+        "check_vulnerabilities": false,
+        "validate_permissions": true,
+        "check_secrets": true,
+        "network_isolation": true
+    },
+    "ci_cd": {
+        "parallel_execution": true,
+        "fail_fast": false,
+        "retry_failed_tests": 1,
+        "artifact_retention_days": 30,
+        "notification_channels": [
+            "github",
+            "slack"
+        ],
+        "deployment_gates": {
+            "min_test_coverage": 80,
+            "max_critical_vulnerabilities": 0,
+            "performance_regression_threshold": 20
+        }
+    }
+}

@@ -1,0 +1,27 @@
+{
+  "overall_success": false,
+  "success_rate": 1.0,
+  "total_checks": 7,
+  "passed_checks": 7,
+  "failed_checks": 0,
+  "errors": [
+    "API Dockerfile has syntax errors",
+    "Frontend Dockerfile has syntax errors",
+    "Dev Compose has syntax errors",
+    "Prod Compose has syntax errors"
+  ],
+  "warnings": [
+    "Cannot validate system resources - psutil not installed"
+  ],
+  "recommendations": [],
+  "validation_results": {
+    "docker_installed": true,
+    "docker_daemon_running": true,
+    "docker_compose_installed": true,
+    "project_structure_valid": true,
+    "network_ports_available": true,
+    "can_create_networks": true,
+    "docker_socket_accessible": true
+  },
+  "timestamp": 1759026944.059473
+}
