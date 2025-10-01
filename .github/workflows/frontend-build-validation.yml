@@ -1,0 +1,382 @@
+name: Frontend Build Validation
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend-build-validation.yml"
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend-build-validation.yml"
+  workflow_dispatch:
+    inputs:
+      test_type:
+        description: "Type of validation to run"
+        required: false
+        type: choice
+        options:
+          - "all"
+          - "validation_only"
+          - "docker_only"
+          - "automated_suite"
+        default: "all"
+
+env:
+  DOCKER_BUILDKIT: 1
+  COMPOSE_DOCKER_CLI_BUILD: 1
+  NODE_VERSION: "18"
+
+jobs:
+  build-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    strategy:
+      matrix:
+        validation-type:
+          [dependencies, structure, typescript, build, docker, environment]
+      fail-fast: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: |
+          npm ci --legacy-peer-deps --no-audit --no-fund
+
+      - name: Make scripts executable
+        working-directory: frontend
+        run: |
+          chmod +x build-validation.js
+          chmod +x docker-build-test.js
+          chmod +x automated-build-test.js
+          chmod +x validate-build.sh
+          chmod +x test-docker-build.sh
+
+      - name: Run specific validation
+        working-directory: frontend
+        run: |
+          case "${{ matrix.validation-type }}" in
+            "dependencies")
+              node build-validation.js dependencies
+              ;;
+            "structure")
+              node build-validation.js structure
+              ;;
+            "typescript")
+              node build-validation.js typescript
+              ;;
+            "build")
+              node build-validation.js build
+              ;;
+            "docker")
+              node build-validation.js docker
+              ;;
+            "environment")
+              node build-validation.js environment
+              ;;
+            *)
+              echo "Unknown validation type: ${{ matrix.validation-type }}"
+              exit 1
+              ;;
+          esac
+
+      - name: Upload validation report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: validation-report-${{ matrix.validation-type }}
+          path: frontend/build-validation-report.json
+          retention-days: 7
+
+  docker-build-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: build-validation
+    if: github.event.inputs.test_type != 'validation_only'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: |
+          npm ci --legacy-peer-deps --no-audit --no-fund
+
+      - name: Make scripts executable
+        working-directory: frontend
+        run: |
+          chmod +x docker-build-test.js
+
+      - name: Run Docker build test
+        working-directory: frontend
+        run: |
+          node docker-build-test.js test --port 3001
+
+      - name: Upload Docker test report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: docker-build-test-report
+          path: frontend/docker-build-test-report.json
+          retention-days: 7
+
+  automated-test-suite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: [build-validation]
+    if: github.event.inputs.test_type == 'all' || github.event.inputs.test_type == 'automated_suite'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: |
+          npm ci --legacy-peer-deps --no-audit --no-fund
+
+      - name: Make scripts executable
+        working-directory: frontend
+        run: |
+          chmod +x automated-build-test.js
+          chmod +x build-validation.js
+          chmod +x docker-build-test.js
+
+      - name: Run automated test suite
+        working-directory: frontend
+        run: |
+          node automated-build-test.js
+
+      - name: Upload comprehensive test reports
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: automated-test-suite-reports
+          path: |
+            frontend/automated-build-test-report.json
+            frontend/automated-build-test-summary.json
+            frontend/build-validation-report.json
+            frontend/docker-build-test-report.json
+          retention-days: 14
+
+      - name: Comment PR with test results
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+
+            let reportContent = 'Frontend build validation completed. Check artifacts for detailed results.';
+
+            try {
+              const summaryPath = 'frontend/automated-build-test-summary.json';
+              if (fs.existsSync(summaryPath)) {
+                const summary = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
+                
+                reportContent = `## Frontend Build Validation Results
+                
+                **Overall Status:** ${summary.status === 'passed' ? '✅ PASSED' : summary.status === 'passed_with_warnings' ? '⚠️ PASSED WITH WARNINGS' : '❌ FAILED'}
+                
+                **Summary:**
+                - Test Phases: ${summary.summary.passed_phases}/${summary.summary.total_phases} passed
+                - Success Rate: ${(summary.summary.success_rate * 100).toFixed(1)}%
+                - Total Duration: ${(summary.metrics.total_test_time_ms / 1000).toFixed(1)} seconds
+                - Errors: ${summary.summary.errors_count}
+                - Warnings: ${summary.summary.warnings_count}
+                
+                **Phase Results:**
+                ${Object.entries(summary.phase_statuses).map(([name, status]) => 
+                  `- ${name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}: ${status === 'passed' ? '✅' : status === 'passed_with_warnings' ? '⚠️' : '❌'}`
+                ).join('\n')}
+                
+                📋 **Detailed reports available in workflow artifacts**
+                `;
+              }
+            } catch (error) {
+              console.log('Could not read test summary:', error);
+            }
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: reportContent
+            });
+
+  legacy-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: |
+          npm ci --legacy-peer-deps --no-audit --no-fund
+
+      - name: Run legacy validation scripts
+        working-directory: frontend
+        run: |
+          # Make scripts executable
+          chmod +x validate-build.sh
+          chmod +x test-docker-build.sh
+
+          # Run legacy validation
+          bash validate-build.sh --full
+
+      - name: Upload legacy validation results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: legacy-validation-results
+          path: |
+            frontend/*.log
+          retention-days: 7
+
+  security-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: |
+          npm ci --legacy-peer-deps --no-audit --no-fund
+
+      - name: Run security audit
+        working-directory: frontend
+        run: |
+          npm audit --audit-level=moderate --json > security-audit.json || true
+
+      - name: Check for high/critical vulnerabilities
+        working-directory: frontend
+        run: |
+          if npm audit --audit-level=high; then
+            echo "✅ No high or critical vulnerabilities found"
+          else
+            echo "⚠️ High or critical vulnerabilities found"
+            npm audit --audit-level=high
+            exit 1
+          fi
+
+      - name: Upload security audit results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-audit-results
+          path: frontend/security-audit.json
+          retention-days: 30
+
+  performance-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: build-validation
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: |
+          npm ci --legacy-peer-deps --no-audit --no-fund
+
+      - name: Build for performance analysis
+        working-directory: frontend
+        run: |
+          npm run build:production
+
+      - name: Analyze bundle size
+        working-directory: frontend
+        run: |
+          # Install bundle analyzer
+          npm install --no-save webpack-bundle-analyzer
+
+          # Generate bundle analysis
+          npx webpack-bundle-analyzer build/static/js/*.js --report --mode static --report-filename bundle-analysis.html
+
+      - name: Check build size
+        working-directory: frontend
+        run: |
+          BUILD_SIZE=$(du -sh build | cut -f1)
+          echo "Build size: $BUILD_SIZE"
+
+          # Check if build size is reasonable (less than 10MB)
+          BUILD_SIZE_BYTES=$(du -sb build | cut -f1)
+          MAX_SIZE_BYTES=$((10 * 1024 * 1024))  # 10MB
+
+          if [ $BUILD_SIZE_BYTES -gt $MAX_SIZE_BYTES ]; then
+            echo "⚠️ Build size ($BUILD_SIZE) exceeds recommended maximum (10MB)"
+            exit 1
+          else
+            echo "✅ Build size ($BUILD_SIZE) is within acceptable limits"
+          fi
+
+      - name: Upload performance analysis
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: performance-analysis
+          path: |
+            frontend/bundle-analysis.html
+          retention-days: 14

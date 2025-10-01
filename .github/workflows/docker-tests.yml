@@ -1,0 +1,336 @@
+name: Docker Tests
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "Dockerfile*"
+      - "docker-compose*.yml"
+      - "src/**"
+      - "frontend/**"
+      - "tests/test_docker_*.py"
+      - "tests/run_docker_tests.py"
+      - ".github/workflows/docker-tests.yml"
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "Dockerfile*"
+      - "docker-compose*.yml"
+      - "src/**"
+      - "frontend/**"
+      - "tests/test_docker_*.py"
+      - "tests/run_docker_tests.py"
+      - ".github/workflows/docker-tests.yml"
+  workflow_dispatch:
+    inputs:
+      test_suite:
+        description: "Specific test suite to run (optional)"
+        required: false
+        type: choice
+        options:
+          - "all"
+          - "container_integration"
+          - "e2e_workflows"
+          - "performance_validation"
+        default: "all"
+
+env:
+  DOCKER_BUILDKIT: 1
+  COMPOSE_DOCKER_CLI_BUILD: 1
+
+jobs:
+  docker-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    strategy:
+      matrix:
+        test-type: [integration, e2e, performance]
+      fail-fast: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-json-report requests docker psutil pillow
+          pip install -r requirements.txt
+
+      - name: Create test directories
+        run: |
+          mkdir -p logs/api logs/traefik
+          mkdir -p data/redis data/prometheus data/grafana
+          mkdir -p cache/huggingface cache/torch cache/diffsynth cache/controlnet
+          mkdir -p models/diffsynth models/controlnet
+          mkdir -p generated_images uploads offload
+          mkdir -p ssl config/redis config/prometheus config/grafana
+
+      - name: Set up Docker environment
+        run: |
+          # Create external networks
+          docker network create traefik-public || true
+
+          # Set permissions for Docker socket (if needed)
+          sudo chmod 666 /var/run/docker.sock || true
+
+          # Create required config files
+          mkdir -p config/docker
+
+          # Create basic Traefik config for testing
+          cat > config/docker/traefik.yml << 'EOF'
+          api:
+            dashboard: true
+            insecure: true
+
+          entryPoints:
+            web:
+              address: ":80"
+            websecure:
+              address: ":443"
+
+          providers:
+            docker:
+              exposedByDefault: false
+
+          log:
+            level: INFO
+          EOF
+
+          # Create acme.json with correct permissions
+          touch acme.json
+          chmod 600 acme.json
+
+      - name: Build Docker images
+        run: |
+          # Build API image
+          docker build -t qwen-api:latest -f Dockerfile.api .
+
+          # Build frontend image
+          docker build -t qwen-frontend:latest -f frontend/Dockerfile frontend/
+
+          # Verify images were built
+          docker images | grep qwen
+
+      - name: Run Docker tests
+        run: |
+          # Determine which test suite to run
+          case "${{ matrix.test-type }}" in
+            "integration")
+              TEST_SUITE="container_integration"
+              ;;
+            "e2e")
+              TEST_SUITE="e2e_workflows"
+              ;;
+            "performance")
+              TEST_SUITE="performance_validation"
+              ;;
+            *)
+              TEST_SUITE="all"
+              ;;
+          esac
+
+          # Override with workflow input if provided
+          if [ "${{ github.event.inputs.test_suite }}" != "" ] && [ "${{ github.event.inputs.test_suite }}" != "all" ]; then
+            TEST_SUITE="${{ github.event.inputs.test_suite }}"
+          fi
+
+          # Run the tests
+          python tests/run_docker_tests.py \
+            --suite "$TEST_SUITE" \
+            --output-dir test-results \
+            --no-cleanup
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src
+
+      - name: Collect Docker logs
+        if: always()
+        run: |
+          # Create logs directory
+          mkdir -p test-results/docker-logs
+
+          # Get logs from all containers
+          for container in $(docker ps -a --format "{{.Names}}"); do
+            echo "Collecting logs for container: $container"
+            docker logs "$container" > "test-results/docker-logs/${container}.log" 2>&1 || true
+          done
+
+          # Get Docker system info
+          docker system df > test-results/docker-logs/system-df.txt 2>&1 || true
+          docker system events --since 1h --until now > test-results/docker-logs/system-events.txt 2>&1 || true
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: docker-test-results-${{ matrix.test-type }}
+          path: |
+            test-results/
+            !test-results/**/*.pyc
+          retention-days: 30
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: docker-test-reports-${{ matrix.test-type }}
+          path: |
+            test-results/*.html
+            test-results/*.json
+          retention-days: 7
+
+      - name: Cleanup Docker resources
+        if: always()
+        run: |
+          # Stop all containers
+          docker ps -q | xargs -r docker stop
+
+          # Remove test containers
+          docker ps -a --filter "name=test-" -q | xargs -r docker rm -f
+
+          # Remove test networks
+          docker network ls --filter "name=test-" -q | xargs -r docker network rm
+
+          # Remove test volumes
+          docker volume ls --filter "name=test-" -q | xargs -r docker volume rm -f
+
+          # Prune system
+          docker system prune -f
+
+      - name: Comment PR with test results
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            // Try to read test report
+            let reportContent = 'Docker tests completed. Check artifacts for detailed results.';
+
+            try {
+              const reportPath = 'test-results/docker_test_report.json';
+              if (fs.existsSync(reportPath)) {
+                const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+                const summary = report.summary;
+                
+                reportContent = `## Docker Tests Results (${{ matrix.test-type }})
+                
+                **Overall Result:** ${summary.overall_success ? '✅ PASSED' : '❌ FAILED'}
+                
+                **Summary:**
+                - Test Suites: ${summary.successful_suites}/${summary.total_suites} passed (${(summary.suite_success_rate * 100).toFixed(1)}%)
+                - Individual Tests: ${summary.total_passed}/${summary.total_tests} passed (${(summary.test_success_rate * 100).toFixed(1)}%)
+                - Duration: ${summary.total_duration.toFixed(1)} seconds
+                
+                **Suite Results:**
+                ${Object.entries(report.suite_results).map(([name, result]) => 
+                  `- ${name}: ${result.success ? '✅' : '❌'} (${result.duration.toFixed(1)}s, ${result.passed || 0}/${result.test_count || 0} tests)`
+                ).join('\n')}
+                `;
+              }
+            } catch (error) {
+              console.log('Could not read test report:', error);
+            }
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: reportContent
+            });
+
+  docker-security-scan:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build images for security scan
+        run: |
+          docker build -t qwen-api:scan -f Dockerfile.api .
+          docker build -t qwen-frontend:scan -f frontend/Dockerfile frontend/
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: "qwen-api:scan"
+          format: "sarif"
+          output: "trivy-api-results.sarif"
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: "trivy-api-results.sarif"
+
+  docker-build-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Test Docker build (API)
+        run: |
+          docker build --target runtime -t qwen-api:test -f Dockerfile.api .
+
+          # Test that the image can start
+          docker run --rm -d --name test-api qwen-api:test
+          sleep 10
+
+          # Check if container is running
+          if docker ps | grep test-api; then
+            echo "✅ API container started successfully"
+            docker stop test-api
+          else
+            echo "❌ API container failed to start"
+            docker logs test-api || true
+            exit 1
+          fi
+
+      - name: Test Docker build (Frontend)
+        run: |
+          docker build -t qwen-frontend:test -f frontend/Dockerfile frontend/
+
+          # Test that the image can start
+          docker run --rm -d --name test-frontend -p 3001:80 qwen-frontend:test
+          sleep 10
+
+          # Check if container is running and serving content
+          if docker ps | grep test-frontend; then
+            echo "✅ Frontend container started successfully"
+            
+            # Test if nginx is serving content
+            if curl -f http://localhost:3001/ > /dev/null 2>&1; then
+              echo "✅ Frontend is serving content"
+            else
+              echo "❌ Frontend not serving content"
+              docker logs test-frontend || true
+              exit 1
+            fi
+            
+            docker stop test-frontend
+          else
+            echo "❌ Frontend container failed to start"
+            docker logs test-frontend || true
+            exit 1
+          fi
