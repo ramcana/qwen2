@@ -1,8 +1,8 @@
 # DiffSynth Enhanced Image Generation System 🎨
 
-A comprehensive AI image generation and editing system combining Qwen-Image models with DiffSynth-Studio capabilities, featuring multiple frontends and optimized for high-end hardware.
+A comprehensive AI image generation and editing system combining Qwen-Image models with DiffSynth-Studio capabilities, featuring multiple deployment options including Docker containerization and optimized for high-end hardware.
 
-> **🚀 Latest**: Enhanced with DiffSynth-Studio integration, multiple frontend options, and organized project structure. Full CORS support for seamless web interface experience.
+> **🚀 Latest**: Complete Docker containerization with production-ready deployment, enhanced DiffSynth-Studio integration, multiple frontend options, and organized project structure. Full CORS support for seamless web interface experience.
 
 ## ✨ Features
 
@@ -23,11 +23,13 @@ A comprehensive AI image generation and editing system combining Qwen-Image mode
 
 ### Technical Features
 
+- **🐳 Docker Containerization**: Complete Docker setup with development and production environments
 - **🔒 Local Deployment**: No cloud dependencies, complete privacy
 - **📊 Metadata Management**: Automatic saving of generation parameters
 - **🔄 Resumable Downloads**: Smart model downloading with automatic resume
 - **🛡️ CORS Support**: Seamless cross-origin requests for web interfaces
 - **🧪 Comprehensive Testing**: Automated testing suite with integration tests
+- **⚖️ Load Balancing**: Traefik reverse proxy with SSL termination and service discovery
 
 ## 🖥️ System Requirements
 
@@ -47,7 +49,30 @@ A comprehensive AI image generation and editing system combining Qwen-Image mode
 
 ## 🚀 Quick Start
 
-### **Initial Setup**
+### **🐳 Docker Deployment (Recommended)**
+
+The fastest way to get started with a complete containerized environment:
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/ramcana/qwen2.git
+cd qwen2
+
+# 2. Setup Docker environment
+./scripts/setup-docker-env.sh
+
+# 3. Deploy development environment
+./scripts/deploy-docker.sh dev --build
+
+# 4. Access the application
+# Frontend: http://localhost:3000
+# API: http://localhost:8000
+# Traefik Dashboard: http://localhost:8080
+```
+
+### **📋 Native Installation**
+
+For development or custom setups:
 
 ```bash
 # 1. Clone the repository
@@ -70,7 +95,22 @@ pip install -e .
 cd ..
 ```
 
-### **Launch the System**
+### **Launch Options**
+
+#### Docker (Production-Ready)
+
+```bash
+# Development environment
+./scripts/deploy-docker.sh dev --build
+
+# Production environment
+./scripts/deploy-docker.sh prod --pull
+
+# Check status
+./scripts/docker-ops.sh status
+```
+
+#### Native (Development)
 
 ```bash
 # Start the enhanced API server
@@ -83,7 +123,7 @@ python serve_frontend.py
 # http://localhost:3001/frontend/html/clean_frontend.html
 ```
 
-### **Alternative: Full System Startup**
+#### Full System Startup
 
 ```bash
 # Start everything with one command
@@ -94,6 +134,14 @@ python serve_frontend.py
 ```
 
 ### **Available Frontends**
+
+#### Docker Deployment (Recommended)
+
+- **Production Frontend**: http://localhost:3000 (React + Nginx)
+- **API Documentation**: http://localhost:8000/docs
+- **Traefik Dashboard**: http://localhost:8080
+
+#### Native Deployment
 
 Choose the interface that best fits your needs:
 
@@ -136,6 +184,30 @@ Choose the interface that best fits your needs:
 
 ### **Development Commands**
 
+#### Docker Commands
+
+```bash
+# Deploy development environment
+./scripts/deploy-docker.sh dev --build
+
+# View logs
+./scripts/docker-ops.sh logs api
+
+# Open shell in container
+./scripts/docker-ops.sh shell api
+
+# Check service status
+./scripts/docker-ops.sh status
+
+# Backup data
+./scripts/docker-ops.sh backup
+
+# Clean up resources
+./scripts/docker-ops.sh clean
+```
+
+#### Native Commands
+
 ```bash
 # Test the system
 python tools/quick_test.py
@@ -172,7 +244,10 @@ qwen2/
 │   │   ├── enhanced_frontend.html # Feature-rich interface
 │   │   ├── simple_frontend.html # Basic interface
 │   │   └── docker_frontend.html # Docker-optimized interface
-│   └── src/                     # React frontend (if using)
+│   ├── src/                     # React frontend source
+│   ├── Dockerfile               # Frontend container
+│   ├── Dockerfile.prod          # Production frontend container
+│   └── nginx.conf               # Nginx configuration
 ├── tests/                       # Test suite
 │   ├── frontend/                # Frontend tests
 │   │   ├── simple_test.html     # Basic API tests
@@ -189,6 +264,9 @@ qwen2/
 │   ├── setup/                   # Setup scripts
 │   │   ├── setup_ubuntu_native.sh
 │   │   └── diffsynth_qwen_setup.py
+│   ├── deploy-docker.sh         # Docker deployment script
+│   ├── docker-ops.sh            # Docker operations
+│   ├── setup-docker-env.sh      # Docker environment setup
 │   ├── fix-frontend.sh          # Frontend fixes
 │   └── run-frontend-tests.sh    # Frontend testing
 ├── docs/                        # Documentation
@@ -196,17 +274,28 @@ qwen2/
 │   │   ├── WSL_CRASH_ANALYSIS.md
 │   │   ├── CACHE_FIX_SUMMARY.md
 │   │   └── SOLUTION.md
+│   ├── DOCKER_DEPLOYMENT.md     # Docker deployment guide
+│   ├── DOCKER_API_README.md     # Docker API documentation
+│   ├── SECURITY.md              # Security configuration
 │   ├── DAILY_WORKFLOW.md        # Daily usage guide
 │   └── integration_plan.md      # Integration documentation
 ├── config/                      # Configuration files
 │   ├── docker/                  # Docker configurations
-│   │   ├── docker-compose.prod.yml
-│   │   ├── traefik.yml
-│   │   └── nginx.conf
+│   │   ├── traefik.yml          # Traefik configuration
+│   │   ├── security.yml         # Security settings
+│   │   └── monitoring.yml       # Monitoring setup
 │   └── *.json                   # JSON config files
+├── docker-compose.yml           # Main Docker Compose file
+├── docker-compose.dev.yml       # Development overrides
+├── docker-compose.prod.yml      # Production configuration
+├── Dockerfile.api               # API server container
+├── .dockerignore                # Docker ignore file
+├── .env.example                 # Environment variables template
 ├── DiffSynth-Studio/            # External dependency (git clone)
-├── models/                      # Downloaded models
-├── generated_images/            # Output directory
+├── models/                      # Downloaded models (persistent volume)
+├── cache/                       # Model cache (persistent volume)
+├── generated_images/            # Output directory (persistent volume)
+├── uploads/                     # User uploads (persistent volume)
 ├── serve_frontend.py            # Frontend server utility
 ├── start-full-system.sh         # System startup script
 ├── stop-full-system.sh          # System shutdown script
@@ -281,6 +370,98 @@ response = requests.post("http://localhost:8000/api/edit/image", json={
     "steps": 20
 })
 ```
+
+## 🐳 Docker Deployment
+
+### Quick Docker Setup
+
+The Docker deployment provides a complete containerized environment with:
+
+- **Traefik Reverse Proxy**: SSL termination, load balancing, service discovery
+- **FastAPI Backend**: GPU-accelerated ML inference with DiffSynth integration
+- **React Frontend**: Production-optimized build with Nginx
+- **Persistent Storage**: Models, cache, and generated content preservation
+- **Monitoring**: Prometheus metrics and Grafana dashboards (optional)
+
+### Docker Commands
+
+```bash
+# Setup Docker environment
+./scripts/setup-docker-env.sh
+
+# Deploy development environment
+./scripts/deploy-docker.sh dev --build
+
+# Deploy production environment
+./scripts/deploy-docker.sh prod --pull
+
+# View service status
+./scripts/docker-ops.sh status
+
+# View logs
+./scripts/docker-ops.sh logs api
+
+# Access container shell
+./scripts/docker-ops.sh shell api
+
+# Backup data
+./scripts/docker-ops.sh backup
+
+# Clean up resources
+./scripts/docker-ops.sh clean
+```
+
+### Docker Architecture
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Traefik       │    │   Frontend      │    │   API Server    │
+│  (Port 80/443)  │◄──►│   (React+Nginx) │◄──►│   (FastAPI+GPU) │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                       │                       │
+         └───────────────────────┼───────────────────────┘
+                                 │
+                    ┌─────────────────┐
+                    │  Shared Volumes │
+                    │  - Models       │
+                    │  - Cache        │
+                    │  - Generated    │
+                    │  - Uploads      │
+                    └─────────────────┘
+```
+
+### Environment Variables
+
+Configure your deployment with `.env` file:
+
+```bash
+# Core settings
+NODE_ENV=development
+CUDA_VISIBLE_DEVICES=0
+ENABLE_DIFFSYNTH=true
+ENABLE_CONTROLNET=true
+
+# Performance settings
+MEMORY_OPTIMIZATION=true
+TILED_PROCESSING_THRESHOLD=2048
+MAX_BATCH_SIZE=4
+
+# Security settings (production)
+CORS_ORIGINS=https://yourdomain.com
+SECURE_COOKIES=true
+HTTPS_ONLY=true
+```
+
+### Volume Management
+
+Docker volumes ensure data persistence:
+
+| Volume              | Purpose            | Size     | Backup Priority |
+| ------------------- | ------------------ | -------- | --------------- |
+| `models/`           | Pre-trained models | 10-50GB  | Critical        |
+| `cache/`            | Framework cache    | 5-20GB   | Important       |
+| `generated_images/` | User outputs       | Variable | Important       |
+| `uploads/`          | User inputs        | Variable | Critical        |
 
 ## ⚙️ Configuration
 
@@ -401,7 +582,10 @@ du -sh models/Qwen-Image-Edit/
 
 ### Documentation
 
-- 📖 **Setup Guide**: [`SETUP.md`](SETUP.md) - Comprehensive setup instructions
+- 🐳 **Docker Deployment**: [`docs/DOCKER_DEPLOYMENT.md`](docs/DOCKER_DEPLOYMENT.md) - Complete Docker setup guide
+- 📖 **Docker API**: [`docs/DOCKER_API_README.md`](docs/DOCKER_API_README.md) - API container documentation
+- 🔒 **Security**: [`docs/SECURITY.md`](docs/SECURITY.md) - Security configuration and best practices
+- 📖 **Setup Guide**: [`SETUP.md`](SETUP.md) - Native installation instructions
 - 🔧 **Troubleshooting**: `docs/troubleshooting/` - Common issues and solutions
 - 🌐 **Daily Workflow**: `docs/DAILY_WORKFLOW.md` - Usage patterns
 - 📋 **Integration Plan**: `docs/integration_plan.md` - System architecture
@@ -417,8 +601,12 @@ du -sh models/Qwen-Image-Edit/
 
 ## 🚀 What's New
 
-### ✨ Latest Updates (v3.0)
+### ✨ Latest Updates (v4.0)
 
+- **🐳 Complete Docker Containerization**: Production-ready Docker setup with multi-environment support
+- **⚖️ Traefik Reverse Proxy**: Load balancing, SSL termination, and service discovery
+- **🔒 Enhanced Security**: Comprehensive security configuration with network isolation
+- **📊 Monitoring & Logging**: Integrated monitoring with Prometheus and Grafana
 - **🎨 DiffSynth Integration**: Full DiffSynth-Studio integration with professional editing capabilities
 - **🌐 Multiple Frontends**: Clean, Enhanced, Simple, and Docker-optimized web interfaces
 - **⚙️ Enhanced API**: Comprehensive FastAPI backend with job tracking and progress monitoring
@@ -428,12 +616,14 @@ du -sh models/Qwen-Image-Edit/
 
 ### 🎯 Key Features
 
+- **🐳 Docker-First**: Complete containerization with development and production environments
 - **🔄 Real-time Progress**: Live job monitoring with progress updates
 - **🎛️ ControlNet Support**: Advanced control over image generation
 - **📱 Responsive Design**: Works on desktop and mobile devices
 - **🔒 Local Privacy**: All processing happens on your hardware
 - **⚡ Hardware Optimized**: Tuned for RTX 4080 + CUDA 12.1
 - **🛠️ Developer Friendly**: Organized codebase with comprehensive documentation
+- **🚀 Production Ready**: SSL, monitoring, logging, and security out of the box
 
 ## 🤝 Contributing
 
