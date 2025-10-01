@@ -1,0 +1,248 @@
+# Traefik Production Dynamic Configuration
+# Enhanced security and performance settings for production deployment
+
+# HTTP Configuration
+http:
+  # Routers
+  routers:
+    # Dashboard router with strict authentication
+    dashboard:
+      rule: "Host(`${TRAEFIK_DOMAIN:-traefik.example.com}`)"
+      service: api@internal
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+      middlewares:
+        - dashboard-auth
+        - security-headers
+        - rate-limit-strict
+
+    # Main application router
+    app:
+      rule: "Host(`${APP_DOMAIN:-app.example.com}`)"
+      service: qwen-frontend
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+      middlewares:
+        - security-headers
+        - compression
+        - rate-limit
+
+    # API router
+    api:
+      rule: "Host(`${API_DOMAIN:-api.example.com}`)"
+      service: qwen-api
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+      middlewares:
+        - security-headers
+        - cors
+        - rate-limit-api
+        - retry
+
+    # Health check endpoints (internal only)
+    health-api:
+      rule: "Host(`${API_DOMAIN:-api.example.com}`) && Path(`/health`)"
+      service: qwen-api
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+      middlewares:
+        - security-headers
+
+    health-frontend:
+      rule: "Host(`${APP_DOMAIN:-app.example.com}`) && Path(`/health`)"
+      service: qwen-frontend
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+      middlewares:
+        - security-headers
+
+  # Services with enhanced load balancing
+  services:
+    # API service with multiple instances and health checks
+    qwen-api:
+      loadBalancer:
+        servers:
+          - url: "http://qwen-api-1:8000"
+          - url: "http://qwen-api-2:8000"
+          - url: "http://qwen-api-3:8000"
+        healthCheck:
+          path: "/health"
+          interval: "15s"
+          timeout: "5s"
+          scheme: "http"
+          headers:
+            Host: "${API_DOMAIN:-api.example.com}"
+        sticky:
+          cookie:
+            name: "qwen-api-session"
+            secure: true
+            httpOnly: true
+            sameSite: "strict"
+        passHostHeader: true
+
+    # Frontend service
+    qwen-frontend:
+      loadBalancer:
+        servers:
+          - url: "http://qwen-frontend-1:80"
+          - url: "http://qwen-frontend-2:80"
+        healthCheck:
+          path: "/health"
+          interval: "30s"
+          timeout: "3s"
+          scheme: "http"
+          headers:
+            Host: "${APP_DOMAIN:-app.example.com}"
+        passHostHeader: true
+
+  # Enhanced Middleware Configuration
+  middlewares:
+    # Strict dashboard authentication
+    dashboard-auth:
+      basicAuth:
+        users:
+          # Generate with: htpasswd -nb admin password
+          - "${TRAEFIK_AUTH_USER:-admin:$2y$10$2b2cu/0P6dvFYOTwMZQo4OEbb.Npsb.2bJ65v2Oy7SHq6UfXVo0n2}"
+        removeHeader: true
+
+    # Enhanced security headers
+    security-headers:
+      headers:
+        accessControlAllowMethods:
+          - GET
+          - OPTIONS
+          - PUT
+          - POST
+          - DELETE
+        accessControlAllowOriginList:
+          - "https://${APP_DOMAIN:-app.example.com}"
+        accessControlMaxAge: 86400
+        addVaryHeader: true
+        browserXssFilter: true
+        contentTypeNosniff: true
+        forceSTSHeader: true
+        frameDeny: true
+        stsIncludeSubdomains: true
+        stsPreload: true
+        stsSeconds: 63072000
+        referrerPolicy: "strict-origin-when-cross-origin"
+        contentSecurityPolicy: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://${API_DOMAIN:-api.example.com}; frame-ancestors 'none';"
+        customRequestHeaders:
+          X-Forwarded-Proto: "https"
+          X-Real-IP: ""
+        customResponseHeaders:
+          X-Robots-Tag: "noindex, nofollow, nosnippet, noarchive"
+          Server: ""
+
+    # Strict rate limiting for dashboard
+    rate-limit-strict:
+      rateLimit:
+        average: 10
+        period: "1m"
+        burst: 20
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+    # Standard rate limiting
+    rate-limit:
+      rateLimit:
+        average: 100
+        period: "1m"
+        burst: 200
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+    # API rate limiting
+    rate-limit-api:
+      rateLimit:
+        average: 50
+        period: "1m"
+        burst: 100
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+    # Production CORS
+    cors:
+      headers:
+        accessControlAllowCredentials: true
+        accessControlAllowHeaders:
+          - "Content-Type"
+          - "Authorization"
+          - "X-Requested-With"
+          - "X-CSRF-Token"
+        accessControlAllowMethods:
+          - "GET"
+          - "POST"
+          - "PUT"
+          - "DELETE"
+          - "OPTIONS"
+        accessControlAllowOriginList:
+          - "https://${APP_DOMAIN:-app.example.com}"
+        accessControlMaxAge: 86400
+        addVaryHeader: true
+
+    # Enhanced compression
+    compression:
+      compress:
+        excludedContentTypes:
+          - "text/event-stream"
+          - "application/grpc"
+        minResponseBodyBytes: 1024
+
+    # Enhanced retry with circuit breaker
+    retry:
+      retry:
+        attempts: 3
+        initialInterval: "100ms"
+
+    # IP whitelist for admin access (optional)
+    admin-whitelist:
+      ipWhiteList:
+        sourceRange:
+          - "127.0.0.1/32"
+          - "10.0.0.0/8"
+          - "172.16.0.0/12"
+          - "192.168.0.0/16"
+
+# Enhanced TLS Configuration
+tls:
+  options:
+    default:
+      sslProtocols:
+        - "TLSv1.2"
+        - "TLSv1.3"
+      cipherSuites:
+        - "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
+        - "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305"
+        - "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
+      minVersion: "VersionTLS12"
+      maxVersion: "VersionTLS13"
+      curvePreferences:
+        - "CurveP521"
+        - "CurveP384"
+      alpnProtocols:
+        - "h2"
+        - "http/1.1"
+
+    # Modern TLS configuration (TLS 1.3 only)
+    modern:
+      sslProtocols:
+        - "TLSv1.3"
+      minVersion: "VersionTLS13"
+      maxVersion: "VersionTLS13"
+      alpnProtocols:
+        - "h2"
+        - "http/1.1"

@@ -1,0 +1,327 @@
+# =============================================================================
+# Secure Traefik Configuration for Qwen2 Application
+# =============================================================================
+# This configuration provides enhanced security features including:
+# - Network isolation and access controls
+# - Security headers and middleware
+# - Rate limiting and DDoS protection
+# - SSL/TLS security and certificate management
+# - Authentication and authorization
+
+# Global Configuration
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+# API and Dashboard Configuration (Secured)
+api:
+  dashboard: true
+  debug: false
+  insecure: false
+
+# Entry Points with Security Configuration
+entryPoints:
+  # HTTP entry point (redirect to HTTPS)
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entrypoint:
+          to: websecure
+          scheme: https
+          permanent: true
+      middlewares:
+        - security-headers@file
+        - rate-limit@file
+
+  # HTTPS entry point (main)
+  websecure:
+    address: ":443"
+    http:
+      tls:
+        options: modern@file
+        certResolver: letsencrypt
+      middlewares:
+        - security-headers@file
+        - rate-limit@file
+        - compression@file
+
+  # Traefik dashboard (secured)
+  traefik:
+    address: ":8080"
+    http:
+      middlewares:
+        - dashboard-auth@file
+        - security-headers@file
+
+# Certificate Resolvers with Enhanced Security
+certificatesResolvers:
+  # Let's Encrypt for production
+  letsencrypt:
+    acme:
+      email: admin@yourdomain.com
+      storage: /acme.json
+      caServer: https://acme-v02.api.letsencrypt.org/directory
+      httpChallenge:
+        entryPoint: web
+      # DNS challenge for wildcard certificates
+      dnsChallenge:
+        provider: cloudflare
+        resolvers:
+          - "1.1.1.1:53"
+          - "8.8.8.8:53"
+        delayBeforeCheck: 30s
+
+  # Staging environment
+  letsencrypt-staging:
+    acme:
+      email: admin@yourdomain.com
+      storage: /acme-staging.json
+      caServer: https://acme-staging-v02.api.letsencrypt.org/directory
+      httpChallenge:
+        entryPoint: web
+
+# Providers Configuration
+providers:
+  # Docker provider with security constraints
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: qwen-frontend
+    watch: true
+    constraints: "Label(`traefik.constraint-label`, `qwen-public`)"
+
+  # File provider for static configuration
+  file:
+    filename: /etc/traefik/dynamic-security.yml
+    watch: true
+
+# Enhanced Logging Configuration
+log:
+  level: WARN
+  format: json
+  filePath: /var/log/traefik/traefik.log
+
+# Security-focused Access Logs
+accessLog:
+  format: json
+  filePath: /var/log/traefik/access.log
+  bufferingSize: 100
+  filters:
+    statusCodes:
+      - "200-299"
+      - "400-499"
+      - "500-599"
+    retryAttempts: true
+    minDuration: "10ms"
+  fields:
+    defaultMode: keep
+    names:
+      ClientUsername: drop
+      ClientHost: keep
+      ClientPort: drop
+      RequestAddr: keep
+      RequestHost: keep
+      RequestMethod: keep
+      RequestPath: keep
+      RequestProtocol: keep
+      RequestScheme: keep
+      RequestLine: keep
+      DownstreamStatus: keep
+      DownstreamContentSize: keep
+      Duration: keep
+      Overhead: keep
+      RetryAttempts: keep
+
+# Metrics with Security Considerations
+metrics:
+  prometheus:
+    addEntryPointsLabels: true
+    addServicesLabels: true
+    addRoutersLabels: true
+    buckets:
+      - 0.1
+      - 0.3
+      - 1.2
+      - 5.0
+    headerLabels:
+      useragent: User-Agent
+
+# Tracing Configuration (Optional)
+tracing:
+  jaeger:
+    samplingType: const
+    samplingParam: 0.1
+    localAgentHostPort: "127.0.0.1:6831"
+    gen128Bit: true
+    propagation: jaeger
+    traceContextHeaderName: uber-trace-id
+
+# Pilot Configuration (Disabled for Security)
+pilot:
+  dashboard: false
+  token: ""
+
+# Experimental Features (Security-focused)
+experimental:
+  plugins:
+    # Security plugins can be added here
+    fail2ban:
+      moduleName: "github.com/tomMoulard/fail2ban"
+      version: "v0.6.6"
+
+    real-ip:
+      moduleName: "github.com/soulbalz/traefik-real-ip"
+      version: "v1.0.3"
+
+# Cluster Configuration (for high availability)
+cluster:
+  store: consul
+  prefix: traefik
+
+# ServersTransport Configuration for Backend Security
+serversTransport:
+  insecureSkipVerify: false
+  rootCAs:
+    - /etc/ssl/certs/ca-certificates.crt
+  maxIdleConnsPerHost: 42
+  forwardingTimeouts:
+    dialTimeout: 30s
+    responseHeaderTimeout: 0s
+    idleConnTimeout: 90s
+
+# TLS Configuration
+tls:
+  options:
+    # Modern TLS configuration (recommended)
+    modern:
+      minVersion: "VersionTLS12"
+      maxVersion: "VersionTLS13"
+      sslStrategies:
+        - "tls.SniStrict"
+      cipherSuites:
+        - "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
+        - "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305"
+        - "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
+        - "TLS_RSA_WITH_AES_256_GCM_SHA384"
+        - "TLS_RSA_WITH_AES_128_GCM_SHA256"
+      curvePreferences:
+        - "CurveP521"
+        - "CurveP384"
+      alpnProtocols:
+        - "h2"
+        - "http/1.1"
+
+    # Intermediate TLS configuration (compatibility)
+    intermediate:
+      minVersion: "VersionTLS12"
+      cipherSuites:
+        - "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
+        - "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305"
+        - "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
+        - "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384"
+        - "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256"
+        - "TLS_RSA_WITH_AES_256_GCM_SHA384"
+        - "TLS_RSA_WITH_AES_128_GCM_SHA256"
+        - "TLS_RSA_WITH_AES_256_CBC_SHA256"
+        - "TLS_RSA_WITH_AES_128_CBC_SHA256"
+
+# Security-focused HTTP Configuration
+http:
+  middlewares:
+    # Security headers middleware
+    security-headers:
+      headers:
+        # HSTS
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        forceSTSHeader: true
+
+        # Content Security Policy
+        contentSecurityPolicy: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' ws: wss: http: https:; media-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self';"
+
+        # Other security headers
+        frameDeny: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: "strict-origin-when-cross-origin"
+        permissionsPolicy: "camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()"
+
+        # Custom headers
+        customRequestHeaders:
+          X-Forwarded-Proto: "https"
+        customResponseHeaders:
+          X-Robots-Tag: "noindex, nofollow, nosnippet, noarchive"
+          Server: ""
+
+    # Rate limiting middleware
+    rate-limit:
+      rateLimit:
+        burst: 100
+        average: 50
+        period: "1m"
+        sourceCriterion:
+          ipStrategy:
+            depth: 2
+            excludedIPs:
+              - "127.0.0.1/32"
+              - "192.168.1.0/24"
+
+    # Compression middleware
+    compression:
+      compress: {}
+
+    # Authentication middleware for dashboard
+    dashboard-auth:
+      basicAuth:
+        usersFile: "/etc/traefik/users"
+        realm: "Traefik Dashboard"
+        removeHeader: true
+
+    # IP whitelist for admin access
+    admin-whitelist:
+      ipWhiteList:
+        sourceRange:
+          - "127.0.0.1/32"
+          - "192.168.1.0/24"
+          - "10.0.0.0/8"
+
+    # Circuit breaker for resilience
+    circuit-breaker:
+      circuitBreaker:
+        expression: "NetworkErrorRatio() > 0.3 || ResponseCodeRatio(500, 600, 0, 600) > 0.3"
+        checkPeriod: "10s"
+        fallbackDuration: "30s"
+        recoveryDuration: "10s"
+
+    # Retry middleware
+    retry:
+      retry:
+        attempts: 3
+        initialInterval: "100ms"
+
+# Service Configuration Templates
+x-service-defaults: &service-defaults
+  loadBalancer:
+    healthCheck:
+      path: "/health"
+      interval: "30s"
+      timeout: "10s"
+      scheme: "http"
+    sticky:
+      cookie:
+        name: "qwen-server"
+        secure: true
+        httpOnly: true
+        sameSite: "strict"
+
+# Router Configuration Templates
+x-router-defaults: &router-defaults
+  middlewares:
+    - "security-headers@file"
+    - "rate-limit@file"
+    - "compression@file"
+  tls:
+    certResolver: "letsencrypt"
+    options: "modern@file"

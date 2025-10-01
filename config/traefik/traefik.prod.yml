@@ -1,0 +1,113 @@
+# Traefik Production Configuration for Qwen2 Docker Containerization
+# This configuration is optimized for production deployment with enhanced security
+
+# Global Configuration
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+# API and Dashboard Configuration (restricted in production)
+api:
+  dashboard: true
+  debug: false
+  insecure: false
+
+# Entry Points Configuration
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entrypoint:
+          to: websecure
+          scheme: https
+          permanent: true
+
+  websecure:
+    address: ":443"
+    http:
+      tls:
+        options: modern
+        certResolver: letsencrypt
+
+  traefik:
+    address: ":8080"
+
+# Certificate Resolvers for Production SSL
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: ${ACME_EMAIL:-admin@example.com}
+      storage: /acme.json
+      httpChallenge:
+        entryPoint: web
+      # DNS Challenge for wildcard certificates (configure as needed)
+      # dnsChallenge:
+      #   provider: ${DNS_PROVIDER:-cloudflare}
+      #   resolvers:
+      #     - "1.1.1.1:53"
+      #     - "8.8.8.8:53"
+
+# Providers Configuration
+providers:
+  # Docker provider for service discovery
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: qwen-network
+    watch: true
+
+  # File provider for static configuration
+  file:
+    filename: /etc/traefik/dynamic.prod.yml
+    watch: true
+
+# Logging Configuration (production level)
+log:
+  level: WARN
+  format: json
+  filePath: /var/log/traefik/traefik.log
+
+# Access Logs
+accessLog:
+  format: json
+  filePath: /var/log/traefik/access.log
+  bufferingSize: 1000
+  filters:
+    statusCodes:
+      - "400-499"
+      - "500-599"
+    retryAttempts: true
+    minDuration: "10ms"
+
+# Metrics Configuration
+metrics:
+  prometheus:
+    addEntryPointsLabels: true
+    addServicesLabels: true
+    addRoutersLabels: true
+    buckets:
+      - 0.1
+      - 0.3
+      - 1.2
+      - 5.0
+    manualRouting: true
+
+# Tracing Configuration (production)
+tracing:
+  jaeger:
+    samplingType: probabilistic
+    samplingParam: 0.1
+    localAgentHostPort: "${JAEGER_AGENT:-127.0.0.1:6831}"
+
+# Pilot Configuration (disabled for security)
+pilot:
+  dashboard: false
+
+# Experimental Features (use with caution)
+experimental:
+  plugins:
+    # Add any required plugins here
+    # example-plugin:
+    #   moduleName: "github.com/example/example-plugin"
+    #   version: "v1.0.0"

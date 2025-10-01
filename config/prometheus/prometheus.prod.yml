@@ -1,0 +1,89 @@
+# Prometheus Production Configuration for Qwen2 Image Generation
+# =============================================================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: "qwen-production"
+    environment: "production"
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - alertmanager:9093
+
+# Load rules once and periodically evaluate them according to the global 'evaluation_interval'.
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+# A scrape configuration containing exactly one endpoint to scrape:
+scrape_configs:
+  # Prometheus itself
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Qwen API Server
+  - job_name: "qwen-api"
+    static_configs:
+      - targets: ["api:8000"]
+    scrape_interval: 15s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+    honor_labels: true
+    params:
+      format: ["prometheus"]
+
+  # Traefik Metrics
+  - job_name: "traefik"
+    static_configs:
+      - targets: ["traefik:8080"]
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Redis Metrics (if redis_exporter is used)
+  - job_name: "redis"
+    static_configs:
+      - targets: ["redis:6379"]
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Node Exporter (system metrics)
+  - job_name: "node-exporter"
+    static_configs:
+      - targets: ["node-exporter:9100"]
+    scrape_interval: 30s
+
+  # Docker Container Metrics
+  - job_name: "docker"
+    static_configs:
+      - targets: ["docker-exporter:9323"]
+    scrape_interval: 30s
+
+  # GPU Metrics (if nvidia-ml-py is available)
+  - job_name: "gpu-metrics"
+    static_configs:
+      - targets: ["api:8001"] # Custom GPU metrics endpoint
+    scrape_interval: 30s
+    metrics_path: /gpu-metrics
+    scrape_timeout: 10s
+
+# Remote write configuration (for long-term storage)
+# remote_write:
+#   - url: "https://your-remote-prometheus-endpoint/api/v1/write"
+#     basic_auth:
+#       username: "your-username"
+#       password: "your-password"
+
+# Storage configuration
+storage:
+  tsdb:
+    retention.time: 30d
+    retention.size: 10GB
+    wal-compression: true

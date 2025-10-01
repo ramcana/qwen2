@@ -1,0 +1,169 @@
+# =============================================================================
+# Docker Network Security Configuration for Qwen2 Application
+# =============================================================================
+# This file defines secure network configurations with proper isolation
+# between services and external access control
+
+# Network definitions with security isolation
+networks:
+  # Frontend network - DMZ for public-facing services
+  qwen-frontend:
+    driver: bridge
+    name: qwen-frontend
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.1.0/24
+          gateway: 172.20.1.1
+    driver_opts:
+      com.docker.network.bridge.name: qwen-frontend
+      com.docker.network.bridge.enable_icc: "false"
+      com.docker.network.bridge.enable_ip_masquerade: "true"
+      com.docker.network.driver.mtu: "1500"
+    labels:
+      - "com.qwen.network.zone=dmz"
+      - "com.qwen.network.description=Frontend DMZ network"
+      - "com.qwen.network.security=public"
+
+  # Backend network - Internal services only
+  qwen-backend:
+    driver: bridge
+    name: qwen-backend
+    internal: true # No external access
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.2.0/24
+          gateway: 172.20.2.1
+    driver_opts:
+      com.docker.network.bridge.name: qwen-backend
+      com.docker.network.bridge.enable_icc: "true"
+      com.docker.network.bridge.enable_ip_masquerade: "false"
+      com.docker.network.driver.mtu: "1500"
+    labels:
+      - "com.qwen.network.zone=internal"
+      - "com.qwen.network.description=Internal backend services"
+      - "com.qwen.network.security=private"
+
+  # Database network - Highly restricted
+  qwen-data:
+    driver: bridge
+    name: qwen-data
+    internal: true # No external access
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.3.0/24
+          gateway: 172.20.3.1
+    driver_opts:
+      com.docker.network.bridge.name: qwen-data
+      com.docker.network.bridge.enable_icc: "true"
+      com.docker.network.bridge.enable_ip_masquerade: "false"
+      com.docker.network.driver.mtu: "1500"
+    labels:
+      - "com.qwen.network.zone=data"
+      - "com.qwen.network.description=Database and cache services"
+      - "com.qwen.network.security=restricted"
+
+  # Management network - Admin access only
+  qwen-mgmt:
+    driver: bridge
+    name: qwen-mgmt
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.4.0/24
+          gateway: 172.20.4.1
+    driver_opts:
+      com.docker.network.bridge.name: qwen-mgmt
+      com.docker.network.bridge.enable_icc: "false"
+      com.docker.network.bridge.enable_ip_masquerade: "true"
+      com.docker.network.driver.mtu: "1500"
+    labels:
+      - "com.qwen.network.zone=management"
+      - "com.qwen.network.description=Management and monitoring"
+      - "com.qwen.network.security=admin"
+
+  # External Traefik network (shared across projects)
+  traefik-public:
+    external: true
+    name: traefik-public
+
+# Network security policies
+x-network-policies: &network-policies # Default deny all traffic
+  - action: deny
+    protocol: all
+    source: any
+    destination: any
+
+  # Allow specific service communication
+  - action: allow
+    protocol: tcp
+    source: qwen-frontend
+    destination: qwen-backend
+    ports: [8000]
+
+  # Allow database access from backend only
+  - action: allow
+    protocol: tcp
+    source: qwen-backend
+    destination: qwen-data
+    ports: [5432, 6379]
+
+  # Allow monitoring from management network
+  - action: allow
+    protocol: tcp
+    source: qwen-mgmt
+    destination: qwen-backend
+    ports: [9090, 3000]
+
+# Network security groups
+x-security-groups: &security-groups
+  frontend:
+    - qwen-frontend
+    - traefik-public
+
+  backend:
+    - qwen-backend
+    - qwen-data
+
+  database:
+    - qwen-data
+
+  monitoring:
+    - qwen-mgmt
+    - qwen-backend
+
+# Firewall rules for container-to-container communication
+x-firewall-rules: &firewall-rules
+  ingress:
+    # Allow HTTP/HTTPS from Traefik to frontend
+    - protocol: tcp
+      ports: [80, 443]
+      source: traefik-public
+      destination: qwen-frontend
+
+    # Allow API calls from frontend to backend
+    - protocol: tcp
+      ports: [8000]
+      source: qwen-frontend
+      destination: qwen-backend
+
+    # Allow database connections from backend
+    - protocol: tcp
+      ports: [5432, 6379]
+      source: qwen-backend
+      destination: qwen-data
+
+  egress:
+    # Allow outbound HTTPS for model downloads
+    - protocol: tcp
+      ports: [443]
+      source: qwen-backend
+      destination: any
+
+    # Allow DNS resolution
+    - protocol: udp
+      ports: [53]
+      source: any
+      destination: any

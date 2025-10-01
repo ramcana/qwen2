@@ -1,0 +1,398 @@
+# =============================================================================
+# Traefik Dynamic Security Configuration for Qwen2 Application
+# =============================================================================
+# This file contains dynamic middleware, services, and routing configurations
+# with enhanced security features that can be updated without restarting Traefik
+
+# HTTP Configuration
+http:
+  # Security Middleware Definitions
+  middlewares:
+    # Enhanced security headers
+    enhanced-security-headers:
+      headers:
+        # Strict Transport Security
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        forceSTSHeader: true
+
+        # Content Security Policy (strict)
+        contentSecurityPolicy: |
+          default-src 'self';
+          script-src 'self' 'unsafe-inline' 'unsafe-eval';
+          style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+          font-src 'self' https://fonts.gstatic.com data:;
+          img-src 'self' data: blob: https:;
+          connect-src 'self' ws: wss: http: https:;
+          media-src 'self' blob:;
+          object-src 'none';
+          frame-ancestors 'none';
+          base-uri 'self';
+          form-action 'self';
+          upgrade-insecure-requests;
+          block-all-mixed-content;
+
+        # Additional security headers
+        frameDeny: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: "strict-origin-when-cross-origin"
+        permissionsPolicy: "camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=(), fullscreen=(self), display-capture=()"
+
+        # Cross-Origin policies
+        crossOriginEmbedderPolicy: "require-corp"
+        crossOriginOpenerPolicy: "same-origin"
+        crossOriginResourcePolicy: "same-origin"
+
+        # Custom security headers
+        customResponseHeaders:
+          X-Robots-Tag: "noindex, nofollow, nosnippet, noarchive"
+          X-Permitted-Cross-Domain-Policies: "none"
+          X-Download-Options: "noopen"
+          Server: ""
+          X-Powered-By: ""
+
+    # API-specific security headers
+    api-security-headers:
+      headers:
+        # API-specific CSP
+        contentSecurityPolicy: "default-src 'none'; connect-src 'self'"
+
+        # API security headers
+        frameDeny: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: "no-referrer"
+
+        # CORS headers for API
+        accessControlAllowOriginList:
+          - "https://yourdomain.com"
+          - "https://www.yourdomain.com"
+        accessControlAllowMethods:
+          - "GET"
+          - "POST"
+          - "PUT"
+          - "DELETE"
+          - "OPTIONS"
+        accessControlAllowHeaders:
+          - "Content-Type"
+          - "Authorization"
+          - "X-Requested-With"
+        accessControlMaxAge: 86400
+        addVaryHeader: true
+
+    # Rate limiting with different tiers
+    rate-limit-strict:
+      rateLimit:
+        burst: 20
+        average: 10
+        period: "1m"
+        sourceCriterion:
+          ipStrategy:
+            depth: 2
+            excludedIPs:
+              - "127.0.0.1/32"
+              - "192.168.0.0/16"
+              - "10.0.0.0/8"
+
+    rate-limit-api:
+      rateLimit:
+        burst: 50
+        average: 25
+        period: "1m"
+        sourceCriterion:
+          requestHeaderName: "X-API-Key"
+
+    rate-limit-upload:
+      rateLimit:
+        burst: 5
+        average: 2
+        period: "1m"
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+    # Authentication middleware
+    basic-auth:
+      basicAuth:
+        usersFile: "/etc/traefik/users"
+        realm: "Qwen2 Secure Area"
+        removeHeader: true
+
+    # IP filtering
+    ip-whitelist-admin:
+      ipWhiteList:
+        sourceRange:
+          - "127.0.0.1/32"
+          - "192.168.1.0/24"
+          - "10.0.0.0/8"
+
+    ip-whitelist-api:
+      ipWhiteList:
+        sourceRange:
+          - "0.0.0.0/0" # Allow all for API (use with other security measures)
+
+    # Geographic IP filtering (requires GeoIP plugin)
+    geo-block:
+      plugin:
+        geoblock:
+          allowedCountries:
+            - "US"
+            - "CA"
+            - "GB"
+            - "DE"
+            - "FR"
+          blockedCountries:
+            - "CN"
+            - "RU"
+          defaultAllow: false
+
+    # Request size limiting
+    request-size-limit:
+      buffering:
+        maxRequestBodyBytes: 104857600 # 100MB
+        memRequestBodyBytes: 1048576 # 1MB
+        maxResponseBodyBytes: 104857600 # 100MB
+        memResponseBodyBytes: 1048576 # 1MB
+        retryExpression: "IsNetworkError() && Attempts() <= 2"
+
+    # Compression with security considerations
+    secure-compression:
+      compress:
+        excludedContentTypes:
+          - "text/event-stream"
+          - "application/grpc"
+        minResponseBodyBytes: 1024
+
+    # Circuit breaker for resilience
+    circuit-breaker:
+      circuitBreaker:
+        expression: "NetworkErrorRatio() > 0.3 || ResponseCodeRatio(500, 600, 0, 600) > 0.3"
+        checkPeriod: "10s"
+        fallbackDuration: "30s"
+        recoveryDuration: "10s"
+
+    # Retry with exponential backoff
+    retry-policy:
+      retry:
+        attempts: 3
+        initialInterval: "100ms"
+
+    # Request/Response modification for security
+    strip-headers:
+      headers:
+        customRequestHeaders:
+          X-Forwarded-Proto: "https"
+          X-Forwarded-Port: "443"
+        customResponseHeaders:
+          Server: ""
+          X-Powered-By: ""
+          X-AspNet-Version: ""
+          X-AspNetMvc-Version: ""
+
+    # Redirect HTTP to HTTPS
+    https-redirect:
+      redirectScheme:
+        scheme: "https"
+        permanent: true
+
+    # Add security headers for static content
+    static-security:
+      headers:
+        customResponseHeaders:
+          Cache-Control: "public, max-age=31536000, immutable"
+          X-Content-Type-Options: "nosniff"
+
+    # API versioning and routing
+    api-version-header:
+      headers:
+        customRequestHeaders:
+          X-API-Version: "v1"
+
+    # Request logging for security monitoring
+    access-log:
+      accessLog:
+        filePath: "/var/log/traefik/security-access.log"
+        format: json
+        bufferingSize: 100
+
+  # Service Definitions with Security
+  services:
+    # API service with health checks and load balancing
+    qwen-api-secure:
+      loadBalancer:
+        servers:
+          - url: "http://qwen-api:8000"
+        healthCheck:
+          path: "/health"
+          interval: "30s"
+          timeout: "10s"
+          scheme: "http"
+          headers:
+            X-Health-Check: "traefik"
+        sticky:
+          cookie:
+            name: "qwen-api-server"
+            secure: true
+            httpOnly: true
+            sameSite: "strict"
+        passHostHeader: true
+
+    # Frontend service with caching
+    qwen-frontend-secure:
+      loadBalancer:
+        servers:
+          - url: "http://qwen-frontend:80"
+        healthCheck:
+          path: "/health"
+          interval: "30s"
+          timeout: "5s"
+          scheme: "http"
+        passHostHeader: true
+
+  # Router Definitions with Security
+  routers:
+    # API router with enhanced security
+    api-secure:
+      rule: "Host(`api.yourdomain.com`) || (Host(`yourdomain.com`) && PathPrefix(`/api`))"
+      service: "qwen-api-secure"
+      middlewares:
+        - "https-redirect@file"
+        - "api-security-headers@file"
+        - "rate-limit-api@file"
+        - "secure-compression@file"
+        - "circuit-breaker@file"
+        - "retry-policy@file"
+        - "strip-headers@file"
+      tls:
+        certResolver: "letsencrypt"
+        options: "modern"
+
+    # Frontend router with security
+    frontend-secure:
+      rule: "Host(`yourdomain.com`) || Host(`www.yourdomain.com`)"
+      service: "qwen-frontend-secure"
+      middlewares:
+        - "https-redirect@file"
+        - "enhanced-security-headers@file"
+        - "rate-limit-strict@file"
+        - "secure-compression@file"
+        - "strip-headers@file"
+      tls:
+        certResolver: "letsencrypt"
+        options: "modern"
+
+    # Static assets router with caching
+    static-assets:
+      rule: "Host(`yourdomain.com`) && PathPrefix(`/static`)"
+      service: "qwen-frontend-secure"
+      middlewares:
+        - "static-security@file"
+        - "secure-compression@file"
+      tls:
+        certResolver: "letsencrypt"
+        options: "modern"
+
+    # Upload endpoint with strict rate limiting
+    upload-endpoint:
+      rule: "Host(`api.yourdomain.com`) && PathPrefix(`/api/upload`)"
+      service: "qwen-api-secure"
+      middlewares:
+        - "https-redirect@file"
+        - "api-security-headers@file"
+        - "rate-limit-upload@file"
+        - "request-size-limit@file"
+        - "strip-headers@file"
+      tls:
+        certResolver: "letsencrypt"
+        options: "modern"
+
+    # Admin/Dashboard router with IP restrictions
+    admin-dashboard:
+      rule: "Host(`admin.yourdomain.com`)"
+      service: "qwen-api-secure"
+      middlewares:
+        - "https-redirect@file"
+        - "ip-whitelist-admin@file"
+        - "basic-auth@file"
+        - "enhanced-security-headers@file"
+        - "rate-limit-strict@file"
+      tls:
+        certResolver: "letsencrypt"
+        options: "modern"
+
+# TLS Configuration
+tls:
+  # Certificate stores
+  stores:
+    default:
+      defaultCertificate:
+        certFile: "/etc/ssl/certs/default.crt"
+        keyFile: "/etc/ssl/private/default.key"
+
+  # TLS options for different security levels
+  options:
+    # Modern TLS (highest security)
+    modern:
+      minVersion: "VersionTLS12"
+      maxVersion: "VersionTLS13"
+      cipherSuites:
+        - "TLS_AES_256_GCM_SHA384"
+        - "TLS_CHACHA20_POLY1305_SHA256"
+        - "TLS_AES_128_GCM_SHA256"
+        - "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
+        - "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305"
+        - "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
+      curvePreferences:
+        - "X25519"
+        - "CurveP521"
+        - "CurveP384"
+      alpnProtocols:
+        - "h2"
+        - "http/1.1"
+      clientAuth:
+        caFiles:
+          - "/etc/ssl/certs/ca-certificates.crt"
+        clientAuthType: "NoClientCert"
+
+    # Intermediate TLS (balanced security/compatibility)
+    intermediate:
+      minVersion: "VersionTLS12"
+      cipherSuites:
+        - "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
+        - "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305"
+        - "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
+        - "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384"
+        - "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256"
+        - "TLS_RSA_WITH_AES_256_GCM_SHA384"
+        - "TLS_RSA_WITH_AES_128_GCM_SHA256"
+
+# TCP Configuration (for non-HTTP services)
+tcp:
+  routers:
+    # Secure TCP router for database connections (if needed)
+    database-secure:
+      rule: "HostSNI(`db.yourdomain.com`)"
+      service: "database-service"
+      tls:
+        passthrough: true
+
+  services:
+    database-service:
+      loadBalancer:
+        servers:
+          - address: "qwen-postgres:5432"
+
+# UDP Configuration (for DNS or other UDP services)
+udp:
+  routers:
+    # DNS router (if running internal DNS)
+    dns-router:
+      service: "dns-service"
+
+  services:
+    dns-service:
+      loadBalancer:
+        servers:
+          - address: "127.0.0.1:53"

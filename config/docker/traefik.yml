@@ -1,4 +1,3 @@
-# Traefik Configuration for Qwen-Image
 api:
   dashboard: true
   insecure: true
@@ -6,18 +5,12 @@ api:
 entryPoints:
   web:
     address: ":80"
+  websecure:
+    address: ":443"
 
 providers:
   docker:
-    endpoint: "unix:///var/run/docker.sock"
     exposedByDefault: false
-    network: qwen-network
 
-# Enable access logs
-accessLog: {}
-
-# Enable metrics
-metrics:
-  prometheus:
-    addEntryPointsLabels: true
-    addServicesLabels: true
+log:
+  level: INFO

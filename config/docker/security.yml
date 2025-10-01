@@ -1,0 +1,248 @@
+# =============================================================================
+# Docker Security Configuration for Qwen2 Application
+# =============================================================================
+# This file defines comprehensive security configurations including
+# user management, secrets, security policies, and access controls
+
+# Security policies and configurations
+security:
+  # Container security options
+  container_security:
+    # Default security options for all containers
+    default_security_opts:
+      - no-new-privileges:true
+      - seccomp:unconfined # May need adjustment based on requirements
+      - apparmor:docker-default
+
+    # Read-only root filesystem where possible
+    read_only_root: true
+
+    # Temporary filesystem configurations
+    tmpfs_mounts:
+      - /tmp:size=100m,mode=1777,noexec,nosuid,nodev
+      - /var/tmp:size=50m,mode=1777,noexec,nosuid,nodev
+
+    # Capability dropping (remove unnecessary privileges)
+    cap_drop:
+      - ALL
+
+    # Only add necessary capabilities
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+      - NET_BIND_SERVICE
+
+  # User and group management
+  users:
+    # API service user
+    api_user:
+      uid: 1001
+      gid: 1001
+      name: qwen-api
+      home: /app
+      shell: /bin/sh
+      groups: [qwen-api, docker]
+
+    # Frontend service user
+    frontend_user:
+      uid: 1002
+      gid: 1002
+      name: qwen-frontend
+      home: /usr/share/nginx/html
+      shell: /bin/sh
+      groups: [qwen-frontend, nginx]
+
+    # Database service user
+    db_user:
+      uid: 1003
+      gid: 1003
+      name: qwen-db
+      home: /var/lib/postgresql
+      shell: /bin/sh
+      groups: [qwen-db, postgres]
+
+  # Secrets management
+  secrets:
+    # Database credentials
+    db_password:
+      external: false
+      file: ./secrets/db_password.txt
+      mode: 0400
+      uid: 1003
+      gid: 1003
+
+    # API keys and tokens
+    api_secret_key:
+      external: false
+      file: ./secrets/api_secret_key.txt
+      mode: 0400
+      uid: 1001
+      gid: 1001
+
+    # JWT signing key
+    jwt_secret:
+      external: false
+      file: ./secrets/jwt_secret.txt
+      mode: 0400
+      uid: 1001
+      gid: 1001
+
+    # SSL certificates
+    ssl_cert:
+      external: false
+      file: ./ssl/cert.pem
+      mode: 0444
+      uid: 0
+      gid: 0
+
+    ssl_key:
+      external: false
+      file: ./ssl/key.pem
+      mode: 0400
+      uid: 0
+      gid: 0
+
+  # Access control and permissions
+  access_control:
+    # File system permissions
+    volume_permissions:
+      models:
+        mode: "0755"
+        uid: 1001
+        gid: 1001
+      cache:
+        mode: "0755"
+        uid: 1001
+        gid: 1001
+      uploads:
+        mode: "0755"
+        uid: 1001
+        gid: 1001
+      generated_images:
+        mode: "0755"
+        uid: 1001
+        gid: 1001
+      logs:
+        mode: "0755"
+        uid: 1001
+        gid: 1001
+
+    # Network access control
+    network_policies:
+      # Default deny all
+      default_policy: deny
+
+      # Allowed connections
+      allowed_connections:
+        - from: traefik
+          to: frontend
+          ports: [80, 443]
+        - from: frontend
+          to: api
+          ports: [8000]
+        - from: api
+          to: redis
+          ports: [6379]
+        - from: api
+          to: postgres
+          ports: [5432]
+
+  # Security scanning and monitoring
+  monitoring:
+    # Enable security scanning
+    vulnerability_scanning: true
+
+    # Security audit logging
+    audit_logging:
+      enabled: true
+      level: info
+      destinations:
+        - file: /var/log/security/audit.log
+        - syslog: local0
+
+    # Intrusion detection
+    intrusion_detection:
+      enabled: true
+      rules_file: /etc/security/ids.rules
+
+    # File integrity monitoring
+    file_integrity:
+      enabled: true
+      paths:
+        - /app/src
+        - /etc/nginx
+        - /etc/ssl
+
+# Environment-specific security configurations
+environments:
+  development:
+    security_level: medium
+    debug_mode: true
+    ssl_verification: false
+    cors_origins: ["*"]
+
+  staging:
+    security_level: high
+    debug_mode: false
+    ssl_verification: true
+    cors_origins: ["https://staging.yourdomain.com"]
+
+  production:
+    security_level: maximum
+    debug_mode: false
+    ssl_verification: true
+    cors_origins: ["https://yourdomain.com", "https://www.yourdomain.com"]
+
+# Security compliance frameworks
+compliance:
+  # OWASP security guidelines
+  owasp:
+    enabled: true
+    level: aaa
+
+  # CIS Docker benchmarks
+  cis_docker:
+    enabled: true
+    version: "1.6.0"
+
+  # NIST cybersecurity framework
+  nist:
+    enabled: true
+    functions: [identify, protect, detect, respond, recover]
+
+# Security headers and policies
+security_headers:
+  # Content Security Policy
+  csp:
+    default_src: "'self'"
+    script_src: "'self' 'unsafe-inline'"
+    style_src: "'self' 'unsafe-inline' https://fonts.googleapis.com"
+    font_src: "'self' https://fonts.gstatic.com data:"
+    img_src: "'self' data: blob: https:"
+    connect_src: "'self' ws: wss: http: https:"
+    media_src: "'self' blob:"
+    object_src: "'none'"
+    frame_ancestors: "'none'"
+    base_uri: "'self'"
+    form_action: "'self'"
+
+  # HTTP Strict Transport Security
+  hsts:
+    max_age: 31536000
+    include_subdomains: true
+    preload: true
+
+  # X-Frame-Options
+  x_frame_options: DENY
+
+  # X-Content-Type-Options
+  x_content_type_options: nosniff
+
+  # X-XSS-Protection
+  x_xss_protection: "1; mode=block"
+
+  # Referrer Policy
+  referrer_policy: strict-origin-when-cross-origin

@@ -1,0 +1,111 @@
+# Traefik Configuration for Qwen2 Docker Containerization
+# This configuration provides reverse proxy, load balancing, SSL termination,
+# and service discovery for the Qwen2 application stack
+
+# Global Configuration
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+# API and Dashboard Configuration
+api:
+  dashboard: true
+  debug: true
+  insecure: false
+
+# Entry Points Configuration
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entrypoint:
+          to: websecure
+          scheme: https
+          permanent: true
+
+  websecure:
+    address: ":443"
+    http:
+      tls:
+        options: default
+
+  traefik:
+    address: ":8080"
+
+# Certificate Resolvers for Automatic SSL
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: admin@localhost # Change this to your email
+      storage: /acme.json
+      httpChallenge:
+        entryPoint: web
+      # Alternative: DNS Challenge (uncomment and configure for production)
+      # dnsChallenge:
+      #   provider: cloudflare
+      #   resolvers:
+      #     - "1.1.1.1:53"
+      #     - "8.8.8.8:53"
+
+  # Self-signed certificates for development
+  selfsigned:
+    acme:
+      email: dev@localhost
+      storage: /acme-dev.json
+      caServer: https://acme-staging-v02.api.letsencrypt.org/directory
+      httpChallenge:
+        entryPoint: web
+
+# Providers Configuration
+providers:
+  # Docker provider for service discovery
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: qwen-network
+    watch: true
+
+  # File provider for static configuration
+  file:
+    filename: /etc/traefik/dynamic.yml
+    watch: true
+
+# Logging Configuration
+log:
+  level: INFO
+  format: json
+  filePath: /var/log/traefik/traefik.log
+
+# Access Logs
+accessLog:
+  format: json
+  filePath: /var/log/traefik/access.log
+  bufferingSize: 100
+  filters:
+    statusCodes:
+      - "400-499"
+      - "500-599"
+
+# Metrics Configuration
+metrics:
+  prometheus:
+    addEntryPointsLabels: true
+    addServicesLabels: true
+    addRoutersLabels: true
+    buckets:
+      - 0.1
+      - 0.3
+      - 1.2
+      - 5.0
+
+# Tracing Configuration (optional)
+tracing:
+  jaeger:
+    samplingType: const
+    samplingParam: 1.0
+    localAgentHostPort: "127.0.0.1:6831"
+
+# Pilot Configuration (disabled for security)
+pilot:
+  dashboard: false

@@ -1,0 +1,15 @@
+# Grafana Dashboard Provisioning Configuration
+# =============================================================================
+
+apiVersion: 1
+
+providers:
+  - name: "Qwen Dashboards"
+    orgId: 1
+    folder: "Qwen2 Image Generation"
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/qwen

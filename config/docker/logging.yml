@@ -1,0 +1,272 @@
+# Comprehensive Logging Configuration for Docker Containers
+# This configuration provides structured logging, log rotation, and monitoring
+
+# Global logging settings
+global:
+  log_level: INFO
+  log_format: json
+  max_file_size: 100MB
+  max_files: 5
+  compress: true
+
+# Service-specific logging configurations
+services:
+  # API Server logging
+  api:
+    log_level: ${LOG_LEVEL:-INFO}
+    log_format: ${LOG_FORMAT:-json}
+    access_log: true
+    error_log: true
+
+    # Log files
+    files:
+      - path: /app/logs/api.log
+        level: INFO
+        format: json
+        rotation:
+          max_size: 100MB
+          max_files: 10
+          compress: true
+
+      - path: /app/logs/api-error.log
+        level: ERROR
+        format: json
+        rotation:
+          max_size: 50MB
+          max_files: 5
+          compress: true
+
+      - path: /app/logs/monitoring.log
+        level: INFO
+        format: json
+        rotation:
+          max_size: 50MB
+          max_files: 5
+          compress: true
+
+    # Structured logging fields
+    structured_fields:
+      - timestamp
+      - level
+      - logger
+      - message
+      - module
+      - function
+      - line
+      - request_id
+      - user_id
+      - job_id
+      - generation_time
+      - model_name
+      - gpu_memory_usage
+      - error_type
+      - stack_trace
+
+    # Log filtering
+    filters:
+      # Exclude health check logs from access log
+      - type: exclude
+        pattern: "GET /health"
+        target: access_log
+
+      # Rate limit similar error messages
+      - type: rate_limit
+        pattern: "GPU memory"
+        rate: "1/minute"
+        target: error_log
+
+  # Frontend logging
+  frontend:
+    log_level: ${NGINX_LOG_LEVEL:-warn}
+
+    # Nginx access and error logs
+    access_log:
+      enabled: true
+      format: combined
+      path: /var/log/nginx/access.log
+      rotation:
+        max_size: 50MB
+        max_files: 3
+
+    error_log:
+      enabled: true
+      level: warn
+      path: /var/log/nginx/error.log
+      rotation:
+        max_size: 50MB
+        max_files: 3
+
+    # Custom log formats
+    log_formats:
+      json_combined: |
+        {
+          "timestamp": "$time_iso8601",
+          "remote_addr": "$remote_addr",
+          "remote_user": "$remote_user",
+          "request": "$request",
+          "status": $status,
+          "body_bytes_sent": $body_bytes_sent,
+          "http_referer": "$http_referer",
+          "http_user_agent": "$http_user_agent",
+          "http_x_forwarded_for": "$http_x_forwarded_for",
+          "request_time": $request_time,
+          "upstream_response_time": "$upstream_response_time"
+        }
+
+  # Traefik logging
+  traefik:
+    log_level: ${TRAEFIK_LOG_LEVEL:-INFO}
+
+    # Access logs
+    access_log:
+      enabled: true
+      format: json
+      path: /var/log/traefik/access.log
+
+    # Traefik logs
+    traefik_log:
+      enabled: true
+      level: INFO
+      format: json
+      path: /var/log/traefik/traefik.log
+
+    # Metrics and monitoring
+    metrics:
+      prometheus:
+        enabled: true
+        buckets: [0.1, 0.3, 1.2, 5.0]
+
+      datadog:
+        enabled: false
+        address: "127.0.0.1:8125"
+
+# Log aggregation and forwarding
+aggregation:
+  # Fluentd configuration for log forwarding
+  fluentd:
+    enabled: false
+    host: fluentd
+    port: 24224
+    tag_prefix: qwen
+
+    # Buffer configuration
+    buffer:
+      chunk_limit_size: 2MB
+      queue_limit_length: 32
+      flush_interval: 5s
+      retry_limit: 17
+      retry_wait: 1s
+
+  # Elasticsearch configuration
+  elasticsearch:
+    enabled: false
+    hosts:
+      - elasticsearch:9200
+    index_prefix: qwen-logs
+
+    # Index template
+    template:
+      name: qwen-logs
+      pattern: "qwen-logs-*"
+      settings:
+        number_of_shards: 1
+        number_of_replicas: 0
+        refresh_interval: 30s
+
+# Log monitoring and alerting
+monitoring:
+  # Log-based alerts
+  alerts:
+    - name: high_error_rate
+      condition: "error_count > 10 in 5m"
+      severity: warning
+      notification:
+        - webhook: http://alertmanager:9093/api/v1/alerts
+
+    - name: critical_errors
+      condition: "level == 'CRITICAL'"
+      severity: critical
+      notification:
+        - webhook: http://alertmanager:9093/api/v1/alerts
+
+    - name: disk_space_low
+      condition: "disk_usage_percent > 90"
+      severity: warning
+      notification:
+        - webhook: http://alertmanager:9093/api/v1/alerts
+
+  # Log retention policies
+  retention:
+    # Keep logs for different periods based on level
+    policies:
+      - level: DEBUG
+        retention: 7d
+      - level: INFO
+        retention: 30d
+      - level: WARN
+        retention: 90d
+      - level: ERROR
+        retention: 180d
+      - level: CRITICAL
+        retention: 365d
+
+    # Automatic cleanup
+    cleanup:
+      enabled: true
+      schedule: "0 2 * * *" # Daily at 2 AM
+      dry_run: false
+
+# Performance and resource limits
+performance:
+  # Log processing limits
+  limits:
+    max_log_rate: 1000/s
+    max_buffer_size: 100MB
+    max_concurrent_writers: 10
+
+  # Compression settings
+  compression:
+    enabled: true
+    algorithm: gzip
+    level: 6
+
+  # Async logging
+  async:
+    enabled: true
+    queue_size: 10000
+    flush_interval: 1s
+
+# Security settings
+security:
+  # Log sanitization
+  sanitization:
+    enabled: true
+
+    # Fields to redact
+    redact_fields:
+      - password
+      - token
+      - api_key
+      - secret
+      - authorization
+      - cookie
+
+    # Patterns to redact
+    redact_patterns:
+      - pattern: '\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+        replacement: "[EMAIL_REDACTED]"
+      - pattern: '\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b'
+        replacement: "[CARD_REDACTED]"
+
+  # Access control
+  access_control:
+    # Restrict log file access
+    file_permissions: 0640
+    owner: appuser
+    group: appuser
+
+    # Log viewing permissions
+    viewers:
+      - admin
+      - monitoring
+      - developer

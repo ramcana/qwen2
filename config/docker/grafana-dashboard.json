@@ -1,0 +1,391 @@
+{
+    "dashboard": {
+        "id": null,
+        "title": "Qwen2 Image Generation - System Overview",
+        "tags": [
+            "qwen2",
+            "docker",
+            "monitoring"
+        ],
+        "style": "dark",
+        "timezone": "browser",
+        "refresh": "30s",
+        "time": {
+            "from": "now-1h",
+            "to": "now"
+        },
+        "panels": [
+            {
+                "id": 1,
+                "title": "Service Health Status",
+                "type": "stat",
+                "targets": [
+                    {
+                        "expr": "up{job=\"qwen-api\"}",
+                        "legendFormat": "API Server",
+                        "refId": "A"
+                    },
+                    {
+                        "expr": "up{job=\"traefik\"}",
+                        "legendFormat": "Traefik",
+                        "refId": "B"
+                    },
+                    {
+                        "expr": "up{job=\"nginx\"}",
+                        "legendFormat": "Frontend",
+                        "refId": "C"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "color": {
+                            "mode": "thresholds"
+                        },
+                        "thresholds": {
+                            "steps": [
+                                {
+                                    "color": "red",
+                                    "value": 0
+                                },
+                                {
+                                    "color": "green",
+                                    "value": 1
+                                }
+                            ]
+                        },
+                        "mappings": [
+                            {
+                                "options": {
+                                    "0": {
+                                        "text": "DOWN"
+                                    },
+                                    "1": {
+                                        "text": "UP"
+                                    }
+                                },
+                                "type": "value"
+                            }
+                        ]
+                    }
+                },
+                "gridPos": {
+                    "h": 4,
+                    "w": 12,
+                    "x": 0,
+                    "y": 0
+                }
+            },
+            {
+                "id": 2,
+                "title": "Generation Queue Length",
+                "type": "stat",
+                "targets": [
+                    {
+                        "expr": "qwen_queue_length",
+                        "legendFormat": "Queue Length",
+                        "refId": "A"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "color": {
+                            "mode": "thresholds"
+                        },
+                        "thresholds": {
+                            "steps": [
+                                {
+                                    "color": "green",
+                                    "value": 0
+                                },
+                                {
+                                    "color": "yellow",
+                                    "value": 5
+                                },
+                                {
+                                    "color": "red",
+                                    "value": 10
+                                }
+                            ]
+                        }
+                    }
+                },
+                "gridPos": {
+                    "h": 4,
+                    "w": 12,
+                    "x": 12,
+                    "y": 0
+                }
+            },
+            {
+                "id": 3,
+                "title": "System Resource Usage",
+                "type": "timeseries",
+                "targets": [
+                    {
+                        "expr": "system_cpu_usage_percent",
+                        "legendFormat": "CPU Usage %",
+                        "refId": "A"
+                    },
+                    {
+                        "expr": "system_memory_usage_percent",
+                        "legendFormat": "Memory Usage %",
+                        "refId": "B"
+                    },
+                    {
+                        "expr": "system_disk_usage_percent",
+                        "legendFormat": "Disk Usage %",
+                        "refId": "C"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "color": {
+                            "mode": "palette-classic"
+                        },
+                        "unit": "percent",
+                        "min": 0,
+                        "max": 100,
+                        "thresholds": {
+                            "steps": [
+                                {
+                                    "color": "green",
+                                    "value": 0
+                                },
+                                {
+                                    "color": "yellow",
+                                    "value": 70
+                                },
+                                {
+                                    "color": "red",
+                                    "value": 90
+                                }
+                            ]
+                        }
+                    }
+                },
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 0,
+                    "y": 4
+                }
+            },
+            {
+                "id": 4,
+                "title": "GPU Memory Usage",
+                "type": "timeseries",
+                "targets": [
+                    {
+                        "expr": "qwen_gpu_memory_usage_bytes / (1024^3)",
+                        "legendFormat": "GPU Memory Used (GB)",
+                        "refId": "A"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "color": {
+                            "mode": "continuous-GrYlRd"
+                        },
+                        "unit": "bytes",
+                        "min": 0
+                    }
+                },
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 12,
+                    "y": 4
+                }
+            },
+            {
+                "id": 5,
+                "title": "API Response Times",
+                "type": "timeseries",
+                "targets": [
+                    {
+                        "expr": "histogram_quantile(0.50, rate(qwen_generation_duration_seconds_bucket[5m]))",
+                        "legendFormat": "50th percentile",
+                        "refId": "A"
+                    },
+                    {
+                        "expr": "histogram_quantile(0.95, rate(qwen_generation_duration_seconds_bucket[5m]))",
+                        "legendFormat": "95th percentile",
+                        "refId": "B"
+                    },
+                    {
+                        "expr": "histogram_quantile(0.99, rate(qwen_generation_duration_seconds_bucket[5m]))",
+                        "legendFormat": "99th percentile",
+                        "refId": "C"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "color": {
+                            "mode": "palette-classic"
+                        },
+                        "unit": "s"
+                    }
+                },
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 0,
+                    "y": 12
+                }
+            },
+            {
+                "id": 6,
+                "title": "Generation Success Rate",
+                "type": "stat",
+                "targets": [
+                    {
+                        "expr": "rate(qwen_generation_total{status=\"success\"}[5m]) / rate(qwen_generation_total[5m]) * 100",
+                        "legendFormat": "Success Rate",
+                        "refId": "A"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "color": {
+                            "mode": "thresholds"
+                        },
+                        "unit": "percent",
+                        "thresholds": {
+                            "steps": [
+                                {
+                                    "color": "red",
+                                    "value": 0
+                                },
+                                {
+                                    "color": "yellow",
+                                    "value": 90
+                                },
+                                {
+                                    "color": "green",
+                                    "value": 95
+                                }
+                            ]
+                        }
+                    }
+                },
+                "gridPos": {
+                    "h": 4,
+                    "w": 12,
+                    "x": 12,
+                    "y": 12
+                }
+            },
+            {
+                "id": 7,
+                "title": "Container Restart Count",
+                "type": "timeseries",
+                "targets": [
+                    {
+                        "expr": "increase(container_start_time_seconds[1h])",
+                        "legendFormat": "{{container_label_com_docker_compose_service}}",
+                        "refId": "A"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "color": {
+                            "mode": "palette-classic"
+                        },
+                        "unit": "short"
+                    }
+                },
+                "gridPos": {
+                    "h": 4,
+                    "w": 12,
+                    "x": 12,
+                    "y": 16
+                }
+            },
+            {
+                "id": 8,
+                "title": "Error Rate by Service",
+                "type": "timeseries",
+                "targets": [
+                    {
+                        "expr": "rate(http_requests_total{status=~\"5..\"}[5m])",
+                        "legendFormat": "{{job}} - 5xx errors",
+                        "refId": "A"
+                    },
+                    {
+                        "expr": "rate(http_requests_total{status=~\"4..\"}[5m])",
+                        "legendFormat": "{{job}} - 4xx errors",
+                        "refId": "B"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "color": {
+                            "mode": "palette-classic"
+                        },
+                        "unit": "reqps"
+                    }
+                },
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 0,
+                    "y": 20
+                }
+            },
+            {
+                "id": 9,
+                "title": "Network I/O",
+                "type": "timeseries",
+                "targets": [
+                    {
+                        "expr": "rate(container_network_receive_bytes_total[5m])",
+                        "legendFormat": "{{container_label_com_docker_compose_service}} - RX",
+                        "refId": "A"
+                    },
+                    {
+                        "expr": "rate(container_network_transmit_bytes_total[5m])",
+                        "legendFormat": "{{container_label_com_docker_compose_service}} - TX",
+                        "refId": "B"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "color": {
+                            "mode": "palette-classic"
+                        },
+                        "unit": "Bps"
+                    }
+                },
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 12,
+                    "y": 20
+                }
+            }
+        ],
+        "templating": {
+            "list": [
+                {
+                    "name": "instance",
+                    "type": "query",
+                    "query": "label_values(up, instance)",
+                    "refresh": 1,
+                    "includeAll": true,
+                    "multi": true
+                }
+            ]
+        },
+        "annotations": {
+            "list": [
+                {
+                    "name": "Deployments",
+                    "datasource": "Prometheus",
+                    "expr": "changes(container_start_time_seconds[1m]) > 0",
+                    "titleFormat": "Container Restart",
+                    "textFormat": "{{container_label_com_docker_compose_service}} restarted"
+                }
+            ]
+        }
+    }
+}

@@ -1,0 +1,376 @@
+# Comprehensive Monitoring Configuration for Qwen2 Docker Environment
+# Provides health checks, metrics collection, alerting, and observability
+
+# Global monitoring settings
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: "qwen2-docker"
+    environment: "${ENVIRONMENT:-development}"
+
+# Health check configuration
+health_checks:
+  # Service health check intervals
+  intervals:
+    traefik: 30s
+    api: 30s
+    frontend: 30s
+
+  # Health check timeouts
+  timeouts:
+    traefik: 10s
+    api: 20s
+    frontend: 15s
+
+  # Retry policies
+  retries:
+    traefik: 3
+    api: 5
+    frontend: 3
+
+  # Start periods (time to wait before first health check)
+  start_periods:
+    traefik: 60s
+    api: 300s # Allow time for model loading
+    frontend: 45s
+
+  # Custom health check endpoints
+  endpoints:
+    api:
+      - path: /health
+        expected_status: 200
+        timeout: 5s
+      - path: /health/live
+        expected_status: 200
+        timeout: 3s
+      - path: /health/ready
+        expected_status: 200
+        timeout: 10s
+
+    frontend:
+      - path: /health
+        expected_status: 200
+        timeout: 3s
+      - path: /
+        expected_status: 200
+        timeout: 5s
+
+    traefik:
+      - path: /ping
+        expected_status: 200
+        timeout: 3s
+
+# Metrics collection configuration
+metrics:
+  # Prometheus configuration
+  prometheus:
+    enabled: true
+    port: 9090
+    retention: 15d
+
+    # Scrape configurations
+    scrape_configs:
+      - job_name: "traefik"
+        static_configs:
+          - targets: ["traefik:8080"]
+        scrape_interval: 15s
+        metrics_path: /metrics
+
+      - job_name: "qwen-api"
+        static_configs:
+          - targets: ["api:8000"]
+        scrape_interval: 30s
+        metrics_path: /monitoring/metrics
+        scrape_timeout: 10s
+
+      - job_name: "nginx"
+        static_configs:
+          - targets: ["frontend:80"]
+        scrape_interval: 30s
+        metrics_path: /nginx_status
+        scrape_timeout: 5s
+
+      - job_name: "docker"
+        static_configs:
+          - targets: ["localhost:9323"]
+        scrape_interval: 30s
+
+  # Custom metrics definitions
+  custom_metrics:
+    # API metrics
+    api_metrics:
+      - name: qwen_generation_duration_seconds
+        type: histogram
+        description: "Time spent generating images"
+        buckets: [0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0]
+
+      - name: qwen_generation_total
+        type: counter
+        description: "Total number of image generations"
+        labels: [model_type, status]
+
+      - name: qwen_queue_length
+        type: gauge
+        description: "Current generation queue length"
+
+      - name: qwen_gpu_memory_usage_bytes
+        type: gauge
+        description: "GPU memory usage in bytes"
+
+      - name: qwen_model_load_duration_seconds
+        type: histogram
+        description: "Time spent loading models"
+        buckets: [1.0, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0]
+
+    # System metrics
+    system_metrics:
+      - name: system_cpu_usage_percent
+        type: gauge
+        description: "System CPU usage percentage"
+
+      - name: system_memory_usage_percent
+        type: gauge
+        description: "System memory usage percentage"
+
+      - name: system_disk_usage_percent
+        type: gauge
+        description: "System disk usage percentage"
+        labels: [mount_point]
+
+# Alerting configuration
+alerting:
+  # Alertmanager configuration
+  alertmanager:
+    enabled: true
+    port: 9093
+
+    # Alert routing
+    route:
+      group_by: ["alertname", "cluster", "service"]
+      group_wait: 10s
+      group_interval: 10s
+      repeat_interval: 1h
+      receiver: "default"
+
+    # Notification receivers
+    receivers:
+      - name: "default"
+        webhook_configs:
+          - url: "http://webhook:8080/alerts"
+            send_resolved: true
+
+      - name: "critical"
+        webhook_configs:
+          - url: "http://webhook:8080/critical"
+            send_resolved: true
+        # Add email/slack configs here if needed
+
+  # Alert rules
+  rules:
+    # Service availability alerts
+    - name: service_availability
+      rules:
+        - alert: ServiceDown
+          expr: up == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Service {{ $labels.job }} is down"
+            description: "Service {{ $labels.job }} has been down for more than 1 minute"
+
+        - alert: HighErrorRate
+          expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High error rate detected"
+            description: "Error rate is {{ $value }} errors per second"
+
+    # Resource usage alerts
+    - name: resource_usage
+      rules:
+        - alert: HighCPUUsage
+          expr: system_cpu_usage_percent > 80
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High CPU usage detected"
+            description: "CPU usage is {{ $value }}%"
+
+        - alert: HighMemoryUsage
+          expr: system_memory_usage_percent > 85
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High memory usage detected"
+            description: "Memory usage is {{ $value }}%"
+
+        - alert: HighDiskUsage
+          expr: system_disk_usage_percent > 90
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "High disk usage detected"
+            description: "Disk usage is {{ $value }}%"
+
+        - alert: GPUMemoryHigh
+          expr: qwen_gpu_memory_usage_bytes / (16 * 1024^3) > 0.9
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "GPU memory usage is high"
+            description: "GPU memory usage is {{ $value | humanizePercentage }}"
+
+    # Application-specific alerts
+    - name: qwen_application
+      rules:
+        - alert: LongGenerationQueue
+          expr: qwen_queue_length > 10
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Generation queue is getting long"
+            description: "Queue length is {{ $value }} items"
+
+        - alert: SlowGenerations
+          expr: histogram_quantile(0.95, rate(qwen_generation_duration_seconds_bucket[5m])) > 60
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Image generations are slow"
+            description: "95th percentile generation time is {{ $value }}s"
+
+        - alert: ModelLoadFailure
+          expr: increase(qwen_model_load_failures_total[5m]) > 0
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Model loading failures detected"
+            description: "{{ $value }} model load failures in the last 5 minutes"
+
+# Logging and observability
+observability:
+  # Distributed tracing
+  tracing:
+    enabled: false # Can be enabled with Jaeger
+    jaeger:
+      endpoint: http://jaeger:14268/api/traces
+      service_name: qwen2-api
+
+  # Log aggregation
+  logging:
+    # Centralized logging with ELK stack
+    elasticsearch:
+      enabled: false
+      hosts: ["elasticsearch:9200"]
+      index_prefix: qwen-logs
+
+    # Log forwarding
+    fluentd:
+      enabled: false
+      host: fluentd
+      port: 24224
+
+  # Performance monitoring
+  performance:
+    # APM monitoring
+    apm:
+      enabled: false
+      server_url: http://apm-server:8200
+
+    # Profiling
+    profiling:
+      enabled: false
+      pyspy:
+        enabled: false
+        interval: 10s
+
+# Dashboard configuration
+dashboards:
+  # Grafana dashboards
+  grafana:
+    enabled: true
+    port: 3000
+
+    # Dashboard definitions
+    dashboards:
+      - name: "Qwen2 Overview"
+        file: "dashboards/qwen2-overview.json"
+        description: "Main dashboard showing service health and performance"
+
+      - name: "System Resources"
+        file: "dashboards/system-resources.json"
+        description: "System resource usage and capacity planning"
+
+      - name: "API Performance"
+        file: "dashboards/api-performance.json"
+        description: "API response times, throughput, and error rates"
+
+      - name: "GPU Monitoring"
+        file: "dashboards/gpu-monitoring.json"
+        description: "GPU utilization and memory usage"
+
+    # Data sources
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        url: http://prometheus:9090
+        access: proxy
+        isDefault: true
+
+# Maintenance and cleanup
+maintenance:
+  # Automatic cleanup tasks
+  cleanup:
+    # Clean old metrics data
+    metrics_retention: 15d
+
+    # Clean old logs
+    logs_retention: 30d
+
+    # Clean old health check data
+    health_check_retention: 7d
+
+  # Backup configuration
+  backup:
+    enabled: false
+    schedule: "0 2 * * *" # Daily at 2 AM
+    retention: 7d
+
+    # What to backup
+    targets:
+      - prometheus_data
+      - grafana_dashboards
+      - alertmanager_config
+
+# Security and access control
+security:
+  # Authentication for monitoring endpoints
+  authentication:
+    enabled: false
+    basic_auth:
+      username: admin
+      password_hash: $2y$10$... # bcrypt hash
+
+  # Network security
+  network:
+    # Restrict access to monitoring ports
+    allowed_networks:
+      - 172.20.0.0/16 # Docker network
+      - 127.0.0.1/32 # Localhost
+
+  # TLS configuration
+  tls:
+    enabled: false
+    cert_file: /etc/ssl/certs/monitoring.crt
+    key_file: /etc/ssl/private/monitoring.key

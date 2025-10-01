@@ -1,0 +1,170 @@
+# Traefik Dynamic Configuration
+# This file contains dynamic routing rules, middleware, and TLS configuration
+
+# HTTP Configuration
+http:
+  # Routers
+  routers:
+    # Dashboard router with authentication
+    dashboard:
+      rule: "Host(`traefik.localhost`) || Host(`dashboard.localhost`)"
+      service: api@internal
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: selfsigned
+      middlewares:
+        - dashboard-auth
+        - security-headers
+
+    # API router for health checks and monitoring
+    api-health:
+      rule: "Host(`api.localhost`) && Path(`/health`)"
+      service: qwen-api
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: selfsigned
+      middlewares:
+        - security-headers
+
+    # Frontend health check
+    frontend-health:
+      rule: "Host(`app.localhost`) && Path(`/health`)"
+      service: qwen-frontend
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: selfsigned
+      middlewares:
+        - security-headers
+
+  # Services
+  services:
+    # API service with load balancing and health checks
+    qwen-api:
+      loadBalancer:
+        servers:
+          - url: "http://qwen-api:8000"
+        healthCheck:
+          path: "/health"
+          interval: "30s"
+          timeout: "10s"
+          scheme: "http"
+        sticky:
+          cookie:
+            name: "qwen-api-session"
+            secure: true
+            httpOnly: true
+
+    # Frontend service
+    qwen-frontend:
+      loadBalancer:
+        servers:
+          - url: "http://qwen-frontend:80"
+        healthCheck:
+          path: "/health"
+          interval: "30s"
+          timeout: "5s"
+          scheme: "http"
+
+  # Middleware Configuration
+  middlewares:
+    # Dashboard authentication (basic auth)
+    dashboard-auth:
+      basicAuth:
+        users:
+          # admin:admin (change in production)
+          - "admin:$2y$10$2b2cu/0P6dvFYOTwMZQo4OEbb.Npsb.2bJ65v2Oy7SHq6UfXVo0n2"
+
+    # Security headers
+    security-headers:
+      headers:
+        accessControlAllowMethods:
+          - GET
+          - OPTIONS
+          - PUT
+          - POST
+          - DELETE
+        accessControlAllowOriginList:
+          - "https://app.localhost"
+          - "https://localhost"
+        accessControlMaxAge: 100
+        addVaryHeader: true
+        browserXssFilter: true
+        contentTypeNosniff: true
+        forceSTSHeader: true
+        frameDeny: true
+        stsIncludeSubdomains: true
+        stsPreload: true
+        stsSeconds: 31536000
+        customRequestHeaders:
+          X-Forwarded-Proto: "https"
+
+    # Rate limiting
+    rate-limit:
+      rateLimit:
+        average: 100
+        period: "1m"
+        burst: 200
+
+    # CORS middleware
+    cors:
+      headers:
+        accessControlAllowCredentials: true
+        accessControlAllowHeaders:
+          - "Content-Type"
+          - "Authorization"
+          - "X-Requested-With"
+        accessControlAllowMethods:
+          - "GET"
+          - "POST"
+          - "PUT"
+          - "DELETE"
+          - "OPTIONS"
+        accessControlAllowOriginList:
+          - "https://app.localhost"
+          - "https://localhost"
+        accessControlMaxAge: 100
+        addVaryHeader: true
+
+    # Compression middleware
+    compression:
+      compress: {}
+
+    # Retry middleware
+    retry:
+      retry:
+        attempts: 3
+        initialInterval: "100ms"
+
+# TLS Configuration
+tls:
+  options:
+    default:
+      sslProtocols:
+        - "TLSv1.2"
+        - "TLSv1.3"
+      cipherSuites:
+        - "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
+        - "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305"
+        - "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
+        - "TLS_RSA_WITH_AES_256_GCM_SHA384"
+        - "TLS_RSA_WITH_AES_128_GCM_SHA256"
+      minVersion: "VersionTLS12"
+      maxVersion: "VersionTLS13"
+
+    # Modern TLS configuration for production
+    modern:
+      sslProtocols:
+        - "TLSv1.3"
+      minVersion: "VersionTLS13"
+      maxVersion: "VersionTLS13"
+
+# Certificate Configuration
+certificates:
+  # Development certificates
+  - certFile: /etc/ssl/certs/localhost.crt
+    keyFile: /etc/ssl/private/localhost.key
+    stores:
+      - default
