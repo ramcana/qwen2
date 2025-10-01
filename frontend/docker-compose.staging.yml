@@ -1,0 +1,117 @@
+version: "3.8"
+
+# =============================================================================
+# Staging Docker Compose Configuration for Qwen2 Frontend
+# =============================================================================
+
+services:
+  # Staging Frontend Service
+  frontend-staging:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+      args:
+        NODE_ENV: production
+        REACT_APP_API_URL: /api
+        REACT_APP_WS_URL: /ws
+        REACT_APP_BACKEND_HOST: qwen-api-staging
+        REACT_APP_BACKEND_PORT: 8000
+        REACT_APP_VERSION: 2.0.0-staging
+        REACT_APP_BUILD_TIME: ${REACT_APP_BUILD_TIME}
+        GENERATE_SOURCEMAP: true
+        BUILD_OPTIMIZATION: true
+        INLINE_RUNTIME_CHUNK: false
+        IMAGE_INLINE_SIZE_LIMIT: 10000
+      # Enable BuildKit for advanced caching
+      cache_from:
+        - qwen-frontend:staging-cache
+      target: production
+    image: qwen-frontend:staging
+    container_name: qwen-frontend-staging
+    ports:
+      - "${FRONTEND_STAGING_PORT:-3002}:80"
+    environment:
+      - NODE_ENV=production
+      - NGINX_HOST=staging.localhost
+      - NGINX_PORT=80
+    networks:
+      - qwen-staging
+    restart: unless-stopped
+
+    # Staging resource limits (balanced)
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+        reservations:
+          memory: 256M
+          cpus: "0.5"
+
+    # Staging health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+
+    # Copy staging nginx configuration
+    volumes:
+      - ./nginx.staging.conf:/etc/nginx/nginx.conf:ro
+      - ./.env.staging:/app/.env.staging:ro
+
+    # Staging labels
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend-staging.rule=Host(`staging.localhost`) || Host(`staging.yourdomain.com`)"
+      - "traefik.http.routers.frontend-staging.entrypoints=web"
+      - "traefik.http.services.frontend-staging.loadbalancer.server.port=80"
+      - "com.qwen.service=frontend"
+      - "com.qwen.environment=staging"
+      - "com.qwen.version=2.0.0-staging"
+
+    # Security settings for staging
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+
+  # Staging Backend Mock (for isolated frontend testing)
+  api-mock-staging:
+    image: mockserver/mockserver:latest
+    container_name: qwen-api-mock-staging
+    ports:
+      - "${API_MOCK_PORT:-8001}:1080"
+    environment:
+      - MOCKSERVER_PROPERTY_FILE=/config/mockserver.properties
+      - MOCKSERVER_INITIALIZATION_JSON_PATH=/config/mock-expectations.json
+    volumes:
+      - ./config/staging/mockserver.properties:/config/mockserver.properties:ro
+      - ./config/staging/mock-expectations.json:/config/mock-expectations.json:ro
+    networks:
+      - qwen-staging
+    profiles:
+      - mock
+    labels:
+      - "com.qwen.service=api-mock"
+      - "com.qwen.environment=staging"
+
+networks:
+  qwen-staging:
+    driver: bridge
+    name: qwen-staging-network
+    ipam:
+      config:
+        - subnet: 172.22.0.0/16
+
+# Staging volumes for configuration
+volumes:
+  staging-config:
+    driver: local
+    labels:
+      - "com.qwen.volume.description=Staging configuration files"
+      - "com.qwen.volume.environment=staging"

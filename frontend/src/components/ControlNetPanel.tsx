@@ -37,7 +37,7 @@ const ControlNetPanel: React.FC<ControlNetPanelProps> = ({
   };
 
   const handleImageSelect = async (file: File | null) => {
-    updateCurrentState({ controlImage: file });
+    updateCurrentState({ controlImage: file || undefined });
     setPreviewImage(null);
     setDetectionError(null);
 

@@ -75,11 +75,15 @@ export const useWorkspaceState = () => {
   }, [currentMode]);
 
   const updateCurrentState = useCallback(
-    (updates: Partial<any>) => {
+    (
+      updates: Partial<
+        GenerateWorkspaceState & EditWorkspaceState & ControlNetWorkspaceState
+      >
+    ) => {
       workspaceStates.current[currentMode] = {
         ...workspaceStates.current[currentMode],
         ...updates,
-      };
+      } as any;
     },
     [currentMode]
   );
@@ -89,7 +93,9 @@ export const useWorkspaceState = () => {
   }, []);
 
   const resetCurrentState = useCallback(() => {
-    workspaceStates.current[currentMode] = { ...defaultStates[currentMode] };
+    workspaceStates.current[currentMode] = {
+      ...defaultStates[currentMode],
+    } as any;
   }, [currentMode]);
 
   const getAllStates = useCallback(() => {

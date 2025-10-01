@@ -3,7 +3,8 @@
  */
 
 import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render } from "@testing-library/react";
+import { screen, fireEvent } from "@testing-library/dom";
 import "@testing-library/jest-dom";
 import {
   DiffSynthFallbackUI,

@@ -94,7 +94,9 @@ class ErrorReportingService {
     errorInfo?: React.ErrorInfo,
     additionalContext?: Record<string, any>
   ): Promise<string> {
-    const errorId = `error_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const errorId = `error_${Date.now()}_${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
 
     const errorReport: ErrorReport = {
       id: errorId,
@@ -103,7 +105,7 @@ class ErrorReportingService {
       severity: this.determineSeverity(error),
       message: error.message,
       stack: error.stack,
-      componentStack: errorInfo?.componentStack,
+      componentStack: errorInfo?.componentStack || undefined,
       userAgent: navigator.userAgent,
       url: window.location.href,
       userId: this.userId,

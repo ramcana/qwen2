@@ -1,0 +1,142 @@
+# =============================================================================
+# Enhanced Development Dockerfile for Qwen2 React Frontend
+# =============================================================================
+
+FROM node:18-alpine AS development
+
+# Install system dependencies for development
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    git \
+    curl \
+    bash \
+    && ln -sf python3 /usr/bin/python \
+    && rm -rf /var/cache/apk/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files for dependency caching
+COPY package*.json ./
+COPY .npmrc* ./
+
+# Configure npm for development with enhanced settings
+RUN npm config set registry https://registry.npmjs.org/ && \
+    npm config set fetch-retries 3 && \
+    npm config set fetch-retry-factor 2 && \
+    npm config set fetch-retry-mintimeout 10000 && \
+    npm config set fetch-retry-maxtimeout 60000 && \
+    npm config set audit-level moderate && \
+    npm config set fund false && \
+    npm config set progress true
+
+# Install dependencies with development tools and enhanced caching
+RUN --mount=type=cache,target=/root/.npm,sharing=locked \
+    --mount=type=cache,target=/app/.npm,sharing=locked \
+    npm ci --legacy-peer-deps --no-audit --include=dev
+
+# Copy source code
+COPY . .
+
+# Build arguments for development configuration
+ARG NODE_ENV=development
+ARG REACT_APP_API_URL=http://localhost:8000/api
+ARG REACT_APP_WS_URL=ws://localhost:8000/ws
+ARG REACT_APP_BACKEND_HOST=localhost
+ARG REACT_APP_BACKEND_PORT=8000
+ARG REACT_APP_VERSION=2.0.0-dev
+ARG GENERATE_SOURCEMAP=true
+ARG FAST_REFRESH=true
+ARG CHOKIDAR_USEPOLLING=true
+ARG REACT_APP_DEBUG=true
+
+# Set comprehensive development environment variables
+ENV NODE_ENV=${NODE_ENV}
+ENV REACT_APP_API_URL=${REACT_APP_API_URL}
+ENV REACT_APP_WS_URL=${REACT_APP_WS_URL}
+ENV REACT_APP_BACKEND_HOST=${REACT_APP_BACKEND_HOST}
+ENV REACT_APP_BACKEND_PORT=${REACT_APP_BACKEND_PORT}
+ENV REACT_APP_VERSION=${REACT_APP_VERSION}
+ENV REACT_APP_BUILD_TIME=""
+ENV GENERATE_SOURCEMAP=${GENERATE_SOURCEMAP}
+ENV FAST_REFRESH=${FAST_REFRESH}
+ENV CHOKIDAR_USEPOLLING=${CHOKIDAR_USEPOLLING}
+ENV WATCHPACK_POLLING=true
+ENV WDS_SOCKET_HOST=0.0.0.0
+ENV WDS_SOCKET_PORT=3000
+ENV REACT_APP_DEBUG=${REACT_APP_DEBUG}
+
+# Development-specific optimizations
+ENV TSC_COMPILE_ON_ERROR=true
+ENV ESLINT_NO_DEV_ERRORS=true
+ENV DISABLE_ESLINT_PLUGIN=false
+ENV SKIP_PREFLIGHT_CHECK=true
+
+# Create development health check endpoint
+RUN mkdir -p public && cat > public/health << 'EOF'
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Development Health Check</title>
+    <meta charset="utf-8">
+</head>
+<body>
+    <h1>🚀 Development Server Healthy</h1>
+    <p>Status: <strong>OK</strong></p>
+    <p>Environment: <strong>Development</strong></p>
+    <p>Hot Reload: <strong>Enabled</strong></p>
+    <p>Source Maps: <strong>Enabled</strong></p>
+    <p>Timestamp: <span id="timestamp"></span></p>
+    <script>
+        document.getElementById('timestamp').textContent = new Date().toISOString();
+    </script>
+</body>
+</html>
+EOF
+
+# Create development configuration info endpoint
+RUN cat > public/dev-info.json << 'EOF'
+{
+  "environment": "development",
+  "nodeEnv": "development",
+  "apiUrl": "http://localhost:8000/api",
+  "wsUrl": "ws://localhost:8000/ws",
+  "backendHost": "localhost",
+  "backendPort": "8000",
+  "version": "2.0.0-dev",
+  "sourceMaps": true,
+  "fastRefresh": true,
+  "hotReload": true,
+  "debug": true
+}
+EOF
+
+# Enhanced health check for development with detailed information
+HEALTHCHECK --interval=30s --timeout=15s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:3000/health || curl -f http://localhost:3000/ || exit 1
+
+# Labels for development container management
+LABEL maintainer="Qwen2 Team" \
+      version="2.0.0-dev" \
+      description="Development React frontend with hot reloading and debugging tools" \
+      org.opencontainers.image.title="Qwen2 Frontend Development" \
+      org.opencontainers.image.description="Development-optimized React frontend with hot reload, source maps, and debugging" \
+      org.opencontainers.image.version="2.0.0-dev" \
+      org.opencontainers.image.vendor="Qwen2 Team" \
+      org.opencontainers.image.licenses="MIT"
+
+# Expose development port
+EXPOSE 3000
+
+# Create non-root user for development (optional security)
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S -D -H -u 1001 -h /app -s /sbin/nologin -G nodejs -g nodejs nodejs && \
+    chown -R nodejs:nodejs /app
+
+# Switch to non-root user
+USER nodejs
+
+# Start development server with enhanced configuration
+CMD ["sh", "-c", "echo '🚀 Starting development server with hot reload...' && npm start"]

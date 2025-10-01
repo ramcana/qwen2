@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>API Connection Error - Qwen2 Image Generation</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
+          sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        margin: 0;
+        padding: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #333;
+      }
+      .error-container {
+        background: white;
+        border-radius: 12px;
+        padding: 2rem;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        text-align: center;
+        max-width: 500px;
+        margin: 1rem;
+      }
+      .error-icon {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+      }
+      .error-title {
+        font-size: 1.5rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        color: #e74c3c;
+      }
+      .error-message {
+        font-size: 1rem;
+        line-height: 1.6;
+        margin-bottom: 1.5rem;
+        color: #666;
+      }
+      .retry-button {
+        background: #667eea;
+        color: white;
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: 6px;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+      }
+      .retry-button:hover {
+        background: #5a6fd8;
+      }
+      .status-info {
+        margin-top: 1.5rem;
+        padding: 1rem;
+        background: #f8f9fa;
+        border-radius: 6px;
+        font-size: 0.9rem;
+        color: #666;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="error-container">
+      <div class="error-icon">🔌</div>
+      <h1 class="error-title">Backend Connection Error</h1>
+      <p class="error-message">
+        Unable to connect to the Qwen2 API backend service. This could be due
+        to:
+      </p>
+      <ul style="text-align: left; color: #666; margin-bottom: 1.5rem">
+        <li>Backend container is starting up</li>
+        <li>Network connectivity issues</li>
+        <li>Backend service is temporarily unavailable</li>
+      </ul>
+      <button class="retry-button" onclick="window.location.reload()">
+        Retry Connection
+      </button>
+      <div class="status-info">
+        <strong>Status:</strong> Backend service unavailable<br />
+        <strong>Time:</strong> <span id="timestamp"></span><br />
+        <strong>Service:</strong> Qwen2 Image Generation API
+      </div>
+    </div>
+
+    <script>
+      // Update timestamp
+      document.getElementById("timestamp").textContent =
+        new Date().toLocaleString();
+
+      // Auto-retry every 30 seconds
+      setTimeout(() => {
+        window.location.reload();
+      }, 30000);
+
+      // Show countdown
+      let countdown = 30;
+      const countdownInterval = setInterval(() => {
+        countdown--;
+        if (countdown <= 0) {
+          clearInterval(countdownInterval);
+          return;
+        }
+        const button = document.querySelector(".retry-button");
+        button.textContent = `Retry Connection (${countdown}s)`;
+      }, 1000);
+    </script>
+  </body>
+</html>

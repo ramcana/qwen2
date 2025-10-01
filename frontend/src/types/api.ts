@@ -6,7 +6,7 @@ export interface GenerationRequest {
   num_inference_steps: number;
   cfg_scale: number;
   seed: number;
-  language: 'en' | 'zh';
+  language: "en" | "zh";
   enhance_prompt: boolean;
   aspect_ratio?: string;
 }
@@ -33,7 +33,7 @@ export interface GenerationParameters {
   num_inference_steps: number;
   cfg_scale: number;
   seed: number;
-  language: 'en' | 'zh';
+  language: "en" | "zh";
   enhance_prompt: boolean;
   aspect_ratio?: string;
 }
@@ -47,10 +47,7 @@ export interface StatusResponse {
     cached_memory: number;
     free_memory: number;
     device_name?: string;
-    total_memory_gb?: number;
-    allocated_memory_gb?: number;
-    free_memory_gb?: number;
-    memory_usage_percent?: number;
+    error?: string;
   };
   current_generation?: string | null;
   queue_length: number;
@@ -69,9 +66,9 @@ export interface AspectRatioResponse {
 
 export interface QueueItem {
   job_id: string;
-  type: 'text-to-image' | 'image-to-image';
+  type: "text-to-image" | "image-to-image";
   request: GenerationRequest | ImageToImageRequest;
-  status: 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
+  status: "queued" | "processing" | "completed" | "failed" | "cancelled";
   created_at: string;
   started_at?: string;
   completed_at?: string;

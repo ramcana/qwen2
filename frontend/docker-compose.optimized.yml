@@ -1,0 +1,131 @@
+# =============================================================================
+# Optimized Docker Compose Configuration for Frontend Development
+# =============================================================================
+
+version: "3.8"
+
+services:
+  # Optimized Frontend Service
+  frontend-optimized:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+      args:
+        # Build-time environment variables
+        NODE_ENV: production
+        REACT_APP_API_URL: ${REACT_APP_API_URL:-/api}
+        REACT_APP_WS_URL: ${REACT_APP_WS_URL:-/ws}
+        REACT_APP_BACKEND_HOST: ${REACT_APP_BACKEND_HOST:-qwen-api}
+        REACT_APP_BACKEND_PORT: ${REACT_APP_BACKEND_PORT:-8000}
+        REACT_APP_VERSION: ${REACT_APP_VERSION:-2.0.0}
+        REACT_APP_BUILD_TIME: ${REACT_APP_BUILD_TIME}
+        GENERATE_SOURCEMAP: ${GENERATE_SOURCEMAP:-false}
+        BUILD_OPTIMIZATION: ${BUILD_OPTIMIZATION:-true}
+        INLINE_RUNTIME_CHUNK: ${INLINE_RUNTIME_CHUNK:-false}
+        IMAGE_INLINE_SIZE_LIMIT: ${IMAGE_INLINE_SIZE_LIMIT:-10000}
+      # Enable BuildKit for advanced caching
+      cache_from:
+        - qwen-frontend:cache
+      target: production
+    image: qwen-frontend:optimized
+    container_name: qwen-frontend-optimized
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    environment:
+      # Runtime environment variables
+      - NODE_ENV=production
+    networks:
+      - qwen-network
+    restart: unless-stopped
+
+    # Health check configuration
+    healthcheck:
+      test: ["CMD", "node", "/usr/local/bin/health-check.js", "simple"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 45s
+
+    # Resource limits for optimization
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+        reservations:
+          memory: 128M
+          cpus: "0.25"
+
+    # Security settings
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+
+    # Labels for container management
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`localhost`)"
+      - "traefik.http.routers.frontend.entrypoints=web"
+      - "traefik.http.services.frontend.loadbalancer.server.port=80"
+      - "com.qwen.service=frontend"
+      - "com.qwen.version=2.0.0"
+
+  # Development Frontend Service (for comparison)
+  frontend-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      args:
+        NODE_ENV: development
+        REACT_APP_API_URL: http://localhost:8000/api
+        REACT_APP_WS_URL: ws://localhost:8000/ws
+        REACT_APP_BACKEND_HOST: localhost
+        REACT_APP_BACKEND_PORT: 8000
+        GENERATE_SOURCEMAP: true
+        FAST_REFRESH: true
+        BUILD_OPTIMIZATION: false
+        REACT_APP_DEBUG: true
+      target: development
+    image: qwen-frontend:dev
+    container_name: qwen-frontend-dev
+    ports:
+      - "${FRONTEND_DEV_PORT:-3001}:3000"
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+      - FAST_REFRESH=true
+      - GENERATE_SOURCEMAP=true
+      - REACT_APP_DEBUG=true
+    volumes:
+      # Mount source code for hot reloading
+      - ./src:/app/src:ro
+      - ./public:/app/public:ro
+      - ./package.json:/app/package.json:ro
+      - frontend-dev-node-modules:/app/node_modules
+    networks:
+      - qwen-network
+    restart: unless-stopped
+    profiles:
+      - dev
+    command: ["npm", "start"]
+
+networks:
+  qwen-network:
+    driver: bridge
+    name: qwen-network
+
+# Volumes for persistent caching (optional)
+volumes:
+  node_modules_cache:
+    driver: local
+  build_cache:
+    driver: local
+  frontend-dev-node-modules:
+    driver: local
+    labels:
+      - "com.qwen.volume.description=Frontend development node_modules"

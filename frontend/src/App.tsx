@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { toast } from "react-hot-toast";
-import { useQuery } from "react-query";
+import { useQuery } from "@tanstack/react-query";
 import GenerationPanel from "./components/GenerationPanel";
 import EditPanel from "./components/EditPanel";
 import ControlNetPanel from "./components/ControlNetPanel";
@@ -15,14 +15,17 @@ import {
   SimplifiedEditPanel,
 } from "./components/DiffSynthFallbackUI";
 import { useWorkspaceState } from "./hooks/useWorkspaceState";
+import { useGenerationState } from "./hooks/useGenerationState";
 import { getStatus } from "./services/api";
 import { useErrorReporting } from "./services/errorReporting";
+import { ThemeProvider } from "./contexts/ThemeContext";
 
 const App: React.FC = () => {
   const [showInitializationDetails, setShowInitializationDetails] =
     useState(false);
   const [fallbackMode, setFallbackMode] = useState(false);
   const { currentMode, switchMode } = useWorkspaceState();
+  const generationState = useGenerationState();
   const { reportError } = useErrorReporting();
 
   const {
@@ -30,7 +33,7 @@ const App: React.FC = () => {
     isLoading,
     error,
     refetch,
-  } = useQuery("status", getStatus, {
+  } = useQuery(["status"], getStatus, {
     refetchInterval: (data) => {
       // More frequent updates during initialization
       if (
@@ -97,115 +100,134 @@ const App: React.FC = () => {
   ) : null;
 
   return (
-    <DiffSynthErrorBoundary
-      onError={handleError}
-      onRetry={handleRetry}
-      onFallback={handleFallback}
-      enableFallback={true}
-      fallbackComponent={fallbackComponent}
-      showTechnicalDetails={process.env.NODE_ENV === "development"}
-    >
-      <div className="min-h-screen bg-gray-50">
-        <Header />
+    <ThemeProvider>
+      <DiffSynthErrorBoundary
+        onError={handleError}
+        onRetry={handleRetry}
+        onFallback={handleFallback}
+        enableFallback={true}
+        fallbackComponent={fallbackComponent}
+        showTechnicalDetails={process.env.NODE_ENV === "development"}
+      >
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
+          <Header />
 
-        <main className="container mx-auto px-4 py-6">
-          {/* Mode Selection and Navigation */}
-          <div className="mb-6 space-y-4">
-            <ModeSelector
-              currentMode={currentMode}
-              onModeChange={switchMode}
-              disabled={isLoading}
-            />
-            <Breadcrumb currentMode={currentMode} />
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left Panel - Controls */}
-            <div className="lg:col-span-1 space-y-6">
-              <StatusBar
-                status={status}
-                isLoading={isLoading}
-                error={error}
-                onRetry={() => refetch()}
+          <main className="container mx-auto px-4 py-6">
+            {/* Mode Selection and Navigation */}
+            <div className="mb-6 space-y-4">
+              <ModeSelector
+                currentMode={currentMode}
+                onModeChange={switchMode}
+                disabled={isLoading}
               />
-
-              {/* Render different panels based on current mode */}
-              {currentMode === "generate" && (
-                <DiffSynthErrorBoundary
-                  onError={handleError}
-                  enableFallback={true}
-                  fallbackComponent={<SimplifiedEditPanel />}
-                >
-                  <GenerationPanel />
-                </DiffSynthErrorBoundary>
-              )}
-
-              {currentMode === "edit" && (
-                <DiffSynthErrorBoundary
-                  onError={handleError}
-                  enableFallback={true}
-                  fallbackComponent={<SimplifiedEditPanel />}
-                >
-                  <EditPanel
-                    onGenerate={(params) => {
-                      console.log("Edit generation requested:", params);
-                      // TODO: Implement actual edit generation API call
-                    }}
-                    isGenerating={false}
-                  />
-                </DiffSynthErrorBoundary>
-              )}
-
-              {currentMode === "controlnet" && (
-                <DiffSynthErrorBoundary
-                  onError={handleError}
-                  enableFallback={true}
-                  fallbackComponent={<SimplifiedEditPanel />}
-                >
-                  <ControlNetPanel
-                    onGenerate={(params) => {
-                      console.log("ControlNet generation requested:", params);
-                      // TODO: Implement actual ControlNet generation API call
-                    }}
-                    onDetectControl={async (image, type) => {
-                      console.log("Control detection requested:", {
-                        image: image.name,
-                        type,
-                      });
-                      // TODO: Implement actual control detection API call
-                      // For now, return a placeholder
-                      return "data:image/png;base64,placeholder";
-                    }}
-                    isGenerating={false}
-                    isDetecting={false}
-                  />
-                </DiffSynthErrorBoundary>
-              )}
+              <Breadcrumb currentMode={currentMode} />
             </div>
 
-            {/* Right Panel - Results */}
-            <div className="lg:col-span-2">
-              <DiffSynthErrorBoundary
-                onError={handleError}
-                enableFallback={true}
-              >
-                <ImageDisplay />
-              </DiffSynthErrorBoundary>
-            </div>
-          </div>
-        </main>
+            {/* System Status - Prominent when not ready */}
+            {(!status?.model_loaded || isLoading || error) && (
+              <div className="mb-6">
+                <StatusBar
+                  status={status}
+                  isLoading={isLoading}
+                  error={error}
+                  onRetry={() => refetch()}
+                />
+              </div>
+            )}
 
-        {/* Footer */}
-        <footer className="bg-white border-t mt-12">
-          <div className="container mx-auto px-4 py-6 text-center text-gray-600">
-            <p>Qwen-Image Generator v2.0 | Professional AI Image Generation</p>
-            <p className="text-sm mt-1">
-              Optimized for RTX 4080 • Memory-Managed • React + FastAPI
-            </p>
-          </div>
-        </footer>
-      </div>
-    </DiffSynthErrorBoundary>
+            <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
+              {/* Left Panel - Controls */}
+              <div className="xl:col-span-1 space-y-6">
+                {/* Compact status when model is ready */}
+                {status?.model_loaded && !isLoading && !error && (
+                  <StatusBar
+                    status={status}
+                    isLoading={isLoading}
+                    error={error}
+                    onRetry={() => refetch()}
+                  />
+                )}
+
+                {/* Render different panels based on current mode */}
+                {currentMode === "generate" && (
+                  <DiffSynthErrorBoundary
+                    onError={handleError}
+                    enableFallback={true}
+                    fallbackComponent={<SimplifiedEditPanel />}
+                  >
+                    <GenerationPanel generationState={generationState} />
+                  </DiffSynthErrorBoundary>
+                )}
+
+                {currentMode === "edit" && (
+                  <DiffSynthErrorBoundary
+                    onError={handleError}
+                    enableFallback={true}
+                    fallbackComponent={<SimplifiedEditPanel />}
+                  >
+                    <EditPanel
+                      onGenerate={(params) => {
+                        console.log("Edit generation requested:", params);
+                        // TODO: Implement actual edit generation API call
+                      }}
+                      isGenerating={false}
+                    />
+                  </DiffSynthErrorBoundary>
+                )}
+
+                {currentMode === "controlnet" && (
+                  <DiffSynthErrorBoundary
+                    onError={handleError}
+                    enableFallback={true}
+                    fallbackComponent={<SimplifiedEditPanel />}
+                  >
+                    <ControlNetPanel
+                      onGenerate={(params) => {
+                        console.log("ControlNet generation requested:", params);
+                        // TODO: Implement actual ControlNet generation API call
+                      }}
+                      onDetectControl={async (image, type) => {
+                        console.log("Control detection requested:", {
+                          image: image.name,
+                          type,
+                        });
+                        // TODO: Implement actual control detection API call
+                        // For now, return a placeholder
+                        return "data:image/png;base64,placeholder";
+                      }}
+                      isGenerating={false}
+                      isDetecting={false}
+                    />
+                  </DiffSynthErrorBoundary>
+                )}
+              </div>
+
+              {/* Right Panel - Results */}
+              <div className="xl:col-span-3">
+                <DiffSynthErrorBoundary
+                  onError={handleError}
+                  enableFallback={true}
+                >
+                  <ImageDisplay generationState={generationState} />
+                </DiffSynthErrorBoundary>
+              </div>
+            </div>
+          </main>
+
+          {/* Footer */}
+          <footer className="bg-white dark:bg-gray-800 border-t dark:border-gray-700 mt-12 transition-colors">
+            <div className="container mx-auto px-4 py-6 text-center text-gray-600 dark:text-gray-300">
+              <p>
+                Qwen-Image Generator v2.0 | Professional AI Image Generation
+              </p>
+              <p className="text-sm mt-1">
+                GPU-Accelerated • Memory-Managed • React + FastAPI
+              </p>
+            </div>
+          </footer>
+        </div>
+      </DiffSynthErrorBoundary>
+    </ThemeProvider>
   );
 };
 

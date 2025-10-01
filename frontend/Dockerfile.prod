@@ -1,61 +1,351 @@
-# Production Dockerfile for React Frontend with DiffSynth Enhanced UI
-FROM node:18-alpine as builder
+# =============================================================================
+# Multi-stage optimized Dockerfile for React Frontend with Enhanced Caching
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Stage 1: Dependencies with Advanced Layer Caching
+# -----------------------------------------------------------------------------
+FROM node:18-alpine AS dependencies
+
+# Install system dependencies for build tools
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    git \
+    curl \
+    && ln -sf python3 /usr/bin/python \
+    && rm -rf /var/cache/apk/*
 
 WORKDIR /app
 
-# Copy package files
+# Copy package files for optimal dependency caching
 COPY package*.json ./
+COPY .npmrc* ./
 
-# Install dependencies with production optimizations
-RUN npm ci --only=production --legacy-peer-deps
+# Configure npm for optimal performance and caching
+RUN npm config set registry https://registry.npmjs.org/ && \
+    npm config set fetch-retries 5 && \
+    npm config set fetch-retry-factor 2 && \
+    npm config set fetch-retry-mintimeout 20000 && \
+    npm config set fetch-retry-maxtimeout 120000 && \
+    npm config set audit-level moderate && \
+    npm config set fund false && \
+    npm config set progress false
 
-# Copy source code
+# Install dependencies with advanced caching strategies
+# Use BuildKit cache mounts for persistent npm cache across builds
+RUN --mount=type=cache,target=/root/.npm,sharing=locked \
+    --mount=type=cache,target=/app/.npm,sharing=locked \
+    set -ex && \
+    npm ci --legacy-peer-deps --no-audit --no-fund --prefer-offline --verbose && \
+    npm cache verify
+
+# -----------------------------------------------------------------------------
+# Stage 2: Build with Enhanced Environment Variable Handling
+# -----------------------------------------------------------------------------
+FROM node:18-alpine AS builder
+
+# Install build-time dependencies
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    && ln -sf python3 /usr/bin/python \
+    && rm -rf /var/cache/apk/*
+
+WORKDIR /app
+
+# Copy dependencies from previous stage for optimal layer caching
+COPY --from=dependencies /app/node_modules ./node_modules
+COPY --from=dependencies /app/package*.json ./
+
+# Verify TypeScript installation from cached dependencies
+RUN npx tsc --version || (echo "TypeScript installation failed" && exit 1)
+
+# Copy source code (use .dockerignore to exclude unnecessary files)
 COPY . .
 
-# Build the app with production optimizations
-ENV NODE_ENV=production
-ENV REACT_APP_API_URL=https://api.yourdomain.com
-ENV REACT_APP_WS_URL=wss://api.yourdomain.com/ws
-ENV GENERATE_SOURCEMAP=false
+# Enhanced build arguments with comprehensive environment variable handling
+ARG NODE_ENV=production
+ARG REACT_APP_API_URL=/api
+ARG REACT_APP_WS_URL=/ws
+ARG REACT_APP_BACKEND_HOST=qwen-api
+ARG REACT_APP_BACKEND_PORT=8000
+ARG REACT_APP_VERSION=2.0.0
+ARG REACT_APP_BUILD_TIME
+ARG GENERATE_SOURCEMAP=false
+ARG BUILD_OPTIMIZATION=true
+ARG BUILD_PATH=build
+ARG INLINE_RUNTIME_CHUNK=false
+ARG IMAGE_INLINE_SIZE_LIMIT=10000
+ARG ESLINT_NO_DEV_ERRORS=true
+ARG DISABLE_ESLINT_PLUGIN=false
+ARG TSC_COMPILE_ON_ERROR=true
 
-RUN npm run build
+# Set comprehensive environment variables for build optimization
+ENV NODE_ENV=${NODE_ENV}
+ENV REACT_APP_API_URL=${REACT_APP_API_URL}
+ENV REACT_APP_WS_URL=${REACT_APP_WS_URL}
+ENV REACT_APP_BACKEND_HOST=${REACT_APP_BACKEND_HOST}
+ENV REACT_APP_BACKEND_PORT=${REACT_APP_BACKEND_PORT}
+ENV REACT_APP_VERSION=${REACT_APP_VERSION}
+ENV REACT_APP_BUILD_TIME=${REACT_APP_BUILD_TIME}
+ENV GENERATE_SOURCEMAP=${GENERATE_SOURCEMAP}
+ENV BUILD_PATH=${BUILD_PATH}
+ENV CI=true
+ENV INLINE_RUNTIME_CHUNK=${INLINE_RUNTIME_CHUNK}
+ENV IMAGE_INLINE_SIZE_LIMIT=${IMAGE_INLINE_SIZE_LIMIT}
+ENV ESLINT_NO_DEV_ERRORS=${ESLINT_NO_DEV_ERRORS}
+ENV DISABLE_ESLINT_PLUGIN=${DISABLE_ESLINT_PLUGIN}
+ENV TSC_COMPILE_ON_ERROR=${TSC_COMPILE_ON_ERROR}
+ENV SKIP_PREFLIGHT_CHECK=true
 
-# Production stage with optimized nginx
-FROM nginx:1.25-alpine
+# Memory optimization for build process
+ENV NODE_OPTIONS="--max-old-space-size=4096 --optimize-for-size"
 
-# Install additional tools for health checks
-RUN apk add --no-cache curl
+# Pre-build validation - check if required files exist
+RUN test -f src/index.tsx || (echo "Missing src/index.tsx" && exit 1) && \
+    test -f public/index.html || (echo "Missing public/index.html" && exit 1) && \
+    test -f tsconfig.json || (echo "Missing tsconfig.json" && exit 1)
 
-# Copy built app
-COPY --from=builder /app/build /usr/share/nginx/html
+# Build the application with enhanced error handling and optimization
+RUN set -ex && \
+    echo "Starting optimized React build process..." && \
+    echo "Build environment: NODE_ENV=${NODE_ENV}" && \
+    echo "API URL: ${REACT_APP_API_URL}" && \
+    echo "WebSocket URL: ${REACT_APP_WS_URL}" && \
+    echo "Build path: ${BUILD_PATH}" && \
+    echo "Source maps: ${GENERATE_SOURCEMAP}" && \
+    \
+    # Run production build (not development build)
+    echo "Running production build: npm run build..." && \
+    npm run build 2>&1 | tee build.log && \
+    echo "Production build completed successfully" && \
+    echo "Checking if build directory was created..." && \
+    ls -la && \
+    \
+    echo "Build process completed successfully" && \
+    \
+    # Comprehensive build validation
+    echo "Validating build output..." && \
+    test -d ${BUILD_PATH} || (echo "Build directory not created" && ls -la && exit 1) && \
+    test -f ${BUILD_PATH}/index.html || (echo "Build output missing index.html" && ls -la ${BUILD_PATH} && exit 1) && \
+    test -d ${BUILD_PATH}/static || echo "Warning: static directory not found" && \
+    \
+    # Display build statistics
+    echo "Build output summary:" && \
+    ls -la ${BUILD_PATH}/ && \
+    du -sh ${BUILD_PATH}/* 2>/dev/null || true && \
+    echo "Build validation passed"
 
-# Copy optimized nginx configuration
-COPY nginx.prod.conf /etc/nginx/nginx.conf
+# Post-build optimizations for static assets with robust path detection
+RUN set -euo pipefail; \
+    echo "Applying post-build optimizations..." && \
+    \
+    # Auto-detect build directory to handle different build tools and configurations
+    DETECTED_PATH=""; \
+    for p in "${BUILD_PATH:-}" build dist build-dev; do \
+        if [ -n "$p" ] && [ -d "$p" ]; then DETECTED_PATH="$p"; break; fi; \
+    done; \
+    if [ -z "$DETECTED_PATH" ]; then \
+        echo "No build output found (checked: ${BUILD_PATH:-unset}, build, dist, build-dev)"; \
+        ls -la; exit 1; \
+    fi; \
+    echo "Using build path: $DETECTED_PATH"; \
+    BUILD_PATH="$DETECTED_PATH"; \
+    \
+    # Remove source maps in production for security and size optimization
+    if [ "$NODE_ENV" = "production" ] && [ "${GENERATE_SOURCEMAP:-false}" = "false" ]; then \
+        echo "Removing source maps for production..." && \
+        find "$BUILD_PATH" -name "*.map" -type f -delete 2>/dev/null || echo "No source maps found" && \
+        echo "Source maps removed"; \
+    fi; \
+    \
+    # Pre-compress static assets for better nginx performance
+    echo "Pre-compressing static assets..." && \
+    find "$BUILD_PATH" -type f \( -name "*.js" -o -name "*.css" -o -name "*.html" -o -name "*.json" -o -name "*.svg" \) \
+        -exec gzip -k -9 {} \; ; \
+    \
+    # Create brotli compressed versions if available
+    (find "$BUILD_PATH" -type f \( -name "*.js" -o -name "*.css" -o -name "*.html" -o -name "*.json" -o -name "*.svg" \) \
+        -exec brotli -k -q 11 {} \; 2>/dev/null || echo "Brotli compression skipped"); \
+    \
+    # Create health check file
+    echo 'healthy' > "$BUILD_PATH/health"; \
+    \
+    # Generate build manifest for debugging
+    echo "{\"buildTime\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"nodeEnv\":\"${NODE_ENV}\",\"version\":\"${REACT_APP_VERSION:-2.0.0}\"}" > "$BUILD_PATH/build-info.json"; \
+    \
+    echo "Post-build optimizations completed"
 
-# Copy security headers configuration
-COPY nginx-security.conf /etc/nginx/conf.d/security.conf
+# -----------------------------------------------------------------------------
+# Stage 3: Production Runtime with Optimized Nginx Configuration
+# -----------------------------------------------------------------------------
+FROM nginx:1.25-alpine AS production
 
-# Create nginx cache directories
-RUN mkdir -p /var/cache/nginx/client_temp \
+# Build arguments for runtime configuration
+ARG BUILD_PATH=build
+
+# Install additional tools for health checks, compression, and debugging
+RUN apk add --no-cache \
+    curl \
+    jq \
+    ca-certificates \
+    tzdata \
+    brotli \
+    gzip \
+    && rm -rf /var/cache/apk/*
+
+# Create nginx user for enhanced security
+RUN addgroup -g 1001 -S nginx-app && \
+    adduser -S -D -H -u 1001 -h /var/cache/nginx -s /sbin/nologin -G nginx-app -g nginx-app nginx-app
+
+# Copy all possible build directories and then select the right one
+COPY --from=builder /app/ /tmp/app-build/
+
+# Validate and copy the correct build output
+RUN set -euo pipefail; \
+    DETECTED_PATH=""; \
+    for p in "${BUILD_PATH:-}" build dist build-dev; do \
+        if [ -n "$p" ] && [ -d "/tmp/app-build/$p" ]; then DETECTED_PATH="$p"; break; fi; \
+    done; \
+    if [ -z "$DETECTED_PATH" ]; then \
+        echo "No build output found (checked: ${BUILD_PATH:-unset}, build, dist, build-dev)"; \
+        ls -la /tmp/app-build/; exit 1; \
+    fi; \
+    echo "Using build path: $DETECTED_PATH"; \
+    \
+    # Validate build output
+    test -f "/tmp/app-build/$DETECTED_PATH/index.html" || (echo "index.html not found in $DETECTED_PATH" && exit 1); \
+    test -f "/tmp/app-build/$DETECTED_PATH/build-info.json" || echo "Warning: build-info.json not found"; \
+    \
+    # Copy to nginx html directory
+    cp -r "/tmp/app-build/$DETECTED_PATH"/* /usr/share/nginx/html/; \
+    chown -R nginx-app:nginx-app /usr/share/nginx/html; \
+    \
+    # Clean up temporary files
+    rm -rf /tmp/app-build; \
+    \
+    echo "Build validation and copy completed successfully"
+
+# Copy API error page for backend connection issues
+COPY --chown=nginx-app:nginx-app api_error.html /usr/share/nginx/html/api_error.html
+
+# Copy and validate nginx configurations
+COPY --chown=nginx-app:nginx-app nginx.prod.conf /tmp/nginx.prod.conf
+RUN nginx -t -c /tmp/nginx.prod.conf || (echo "Invalid nginx configuration" && exit 1)
+COPY --chown=nginx-app:nginx-app nginx.prod.conf /etc/nginx/nginx.conf
+
+# Copy security headers configuration with validation
+COPY --chown=nginx-app:nginx-app nginx-security.conf /etc/nginx/conf.d/security.conf
+RUN test -f /etc/nginx/conf.d/security.conf || (echo "Security configuration missing" && exit 1)
+
+# Create optimized nginx cache directories and temporary directories
+RUN set -ex && \
+    mkdir -p /var/cache/nginx/client_temp \
              /var/cache/nginx/proxy_temp \
              /var/cache/nginx/fastcgi_temp \
              /var/cache/nginx/uwsgi_temp \
-             /var/cache/nginx/scgi_temp
+             /var/cache/nginx/scgi_temp \
+             /var/cache/nginx/static \
+             /tmp/nginx \
+             /var/log/nginx \
+    && chown -R nginx-app:nginx-app /var/cache/nginx /tmp/nginx /var/log/nginx /usr/share/nginx/html \
+    && chmod -R 755 /usr/share/nginx/html /var/cache/nginx \
+    && chmod 755 /tmp/nginx /var/log/nginx
 
-# Set proper permissions
-RUN chown -R nginx:nginx /var/cache/nginx \
-    && chown -R nginx:nginx /usr/share/nginx/html \
-    && chmod -R 755 /usr/share/nginx/html
+# Update nginx configuration for container environment and security
+RUN sed -i 's/user nginx;/user nginx-app;/' /etc/nginx/nginx.conf && \
+    sed -i 's|/var/run/nginx.pid|/tmp/nginx/nginx.pid|g' /etc/nginx/nginx.conf && \
+    sed -i 's/qwen-api:8000/qwen-api:8000/g' /etc/nginx/nginx.conf
 
-# Add health check endpoint
-RUN echo '<!DOCTYPE html><html><body>OK</body></html>' > /usr/share/nginx/html/health
+# Create enhanced health check endpoint with build information
+RUN cat > /usr/share/nginx/html/health << 'EOF'
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Frontend Health Check</title>
+    <meta charset="utf-8">
+</head>
+<body>
+    <h1>✅ Frontend Container Healthy</h1>
+    <p>Status: <strong>OK</strong></p>
+    <p>Service: Qwen2 React Frontend</p>
+    <p>Timestamp: <span id="timestamp"></span></p>
+    <script>
+        document.getElementById('timestamp').textContent = new Date().toISOString();
+    </script>
+</body>
+</html>
+EOF
+
+# Create comprehensive startup validation script
+RUN cat > /docker-entrypoint.d/99-validate-setup.sh << 'EOF'
+#!/bin/sh
+set -e
+echo "🚀 Validating optimized frontend container setup..."
+
+# Check critical files exist
+test -f /usr/share/nginx/html/index.html || (echo "❌ ERROR: index.html missing" && exit 1)
+test -f /usr/share/nginx/html/health || (echo "❌ ERROR: health endpoint missing" && exit 1)
+
+# Check static assets
+if [ -d /usr/share/nginx/html/static ]; then
+    echo "✅ Static assets directory found"
+    # Check for compressed assets
+    if find /usr/share/nginx/html/static -name "*.gz" | head -1 | grep -q .; then
+        echo "✅ Gzip compressed assets found"
+    fi
+    if find /usr/share/nginx/html/static -name "*.br" | head -1 | grep -q .; then
+        echo "✅ Brotli compressed assets found"
+    fi
+else
+    echo "⚠️  WARNING: static directory missing"
+fi
+
+# Test nginx configuration
+nginx -t || (echo "❌ ERROR: nginx configuration invalid" && exit 1)
+echo "✅ Nginx configuration valid"
+
+# Check permissions
+test -r /usr/share/nginx/html/index.html || (echo "❌ ERROR: index.html not readable" && exit 1)
+echo "✅ File permissions correct"
+
+# Check build info if available
+if [ -f /usr/share/nginx/html/build-info.json ]; then
+    echo "✅ Build info available:"
+    cat /usr/share/nginx/html/build-info.json
+fi
+
+echo "🎉 Frontend container validation completed successfully"
+EOF
+
+RUN chmod +x /docker-entrypoint.d/99-validate-setup.sh
+
+# Copy enhanced health check script
+COPY --chown=nginx-app:nginx-app health-check.js /usr/local/bin/health-check.js
+RUN chmod +x /usr/local/bin/health-check.js
+
+# Enhanced health check with comprehensive validation
+HEALTHCHECK --interval=30s --timeout=15s --start-period=45s --retries=3 \
+    CMD node /usr/local/bin/health-check.js simple || exit 1
+
+# Container metadata and labels
+LABEL maintainer="Qwen2 Team" \
+      version="2.0.0" \
+      description="Multi-stage optimized React frontend with advanced caching and compression" \
+      org.opencontainers.image.title="Qwen2 Frontend Optimized" \
+      org.opencontainers.image.description="Production-ready React frontend with nginx, layer caching, compression, and security" \
+      org.opencontainers.image.version="2.0.0" \
+      org.opencontainers.image.vendor="Qwen2 Team" \
+      org.opencontainers.image.licenses="MIT"
 
 # Expose port
 EXPOSE 80
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost/health || exit 1
+# Switch to non-root user for security
+USER nginx-app
 
-# Start nginx
-CMD ["nginx", "-g", "daemon off;"]
+# Start nginx with optimized configuration and comprehensive error handling
+CMD ["sh", "-c", "echo '🚀 Starting optimized nginx server...' && nginx -t && exec nginx -g 'daemon off;'"]

@@ -1,0 +1,146 @@
+version: "3.8"
+
+# =============================================================================
+# Enhanced Development Docker Compose for Qwen2 Frontend
+# =============================================================================
+
+services:
+  # Development Frontend with Hot Reloading
+  frontend-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      args:
+        NODE_ENV: development
+        REACT_APP_API_URL: http://localhost:8000/api
+        REACT_APP_WS_URL: ws://localhost:8000/ws
+        REACT_APP_BACKEND_HOST: localhost
+        REACT_APP_BACKEND_PORT: 8000
+        REACT_APP_VERSION: 2.0.0-dev
+        GENERATE_SOURCEMAP: true
+        FAST_REFRESH: true
+        CHOKIDAR_USEPOLLING: true
+        REACT_APP_DEBUG: true
+      # Enable BuildKit for better caching
+      cache_from:
+        - qwen-frontend:dev-cache
+    image: qwen-frontend:dev
+    container_name: qwen-frontend-dev
+    ports:
+      - "${FRONTEND_DEV_PORT:-3000}:3000"
+    volumes:
+      # Mount source code for hot reloading
+      - ./src:/app/src:ro
+      - ./public:/app/public:ro
+      - ./package.json:/app/package.json:ro
+      - ./package-lock.json:/app/package-lock.json:ro
+      - ./tsconfig.json:/app/tsconfig.json:ro
+      - ./tailwind.config.js:/app/tailwind.config.js:ro
+      - ./.env.development:/app/.env:ro
+      # Preserve node_modules in container
+      - frontend-dev-node-modules:/app/node_modules
+    environment:
+      # Load development environment variables
+      - NODE_ENV=development
+      - REACT_APP_API_URL=http://localhost:8000/api
+      - REACT_APP_WS_URL=ws://localhost:8000/ws
+      - REACT_APP_BACKEND_HOST=localhost
+      - REACT_APP_BACKEND_PORT=8000
+      - REACT_APP_VERSION=2.0.0-dev
+      - GENERATE_SOURCEMAP=true
+      - FAST_REFRESH=true
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+      - WDS_SOCKET_HOST=0.0.0.0
+      - WDS_SOCKET_PORT=3000
+      - REACT_APP_DEBUG=true
+      - REACT_APP_ENVIRONMENT=development
+      - TSC_COMPILE_ON_ERROR=true
+      - ESLINT_NO_DEV_ERRORS=true
+    networks:
+      - qwen-dev
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
+    # Development resource limits (generous for debugging)
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "2.0"
+        reservations:
+          memory: 512M
+          cpus: "0.5"
+
+    # Development labels
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend-dev.rule=Host(`dev.localhost`) || Host(`localhost`)"
+      - "traefik.http.routers.frontend-dev.entrypoints=web"
+      - "traefik.http.services.frontend-dev.loadbalancer.server.port=3000"
+      - "com.qwen.service=frontend"
+      - "com.qwen.environment=development"
+      - "com.qwen.version=2.0.0-dev"
+      - "com.qwen.hot-reload=enabled"
+
+  # Production Build Frontend (for comparison testing)
+  frontend-prod-build:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+      args:
+        NODE_ENV: production
+        REACT_APP_API_URL: /api
+        REACT_APP_WS_URL: /ws
+        REACT_APP_BACKEND_HOST: qwen-api
+        REACT_APP_BACKEND_PORT: 8000
+        REACT_APP_VERSION: 2.0.0
+        GENERATE_SOURCEMAP: false
+        BUILD_OPTIMIZATION: true
+      target: production
+    image: qwen-frontend:prod-test
+    container_name: qwen-frontend-prod-test
+    ports:
+      - "${FRONTEND_PROD_TEST_PORT:-3001}:80"
+    environment:
+      - NODE_ENV=production
+    networks:
+      - qwen-dev
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    profiles:
+      - prod-test
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend-prod-test.rule=Host(`prod-test.localhost`)"
+      - "traefik.http.routers.frontend-prod-test.entrypoints=web"
+      - "traefik.http.services.frontend-prod-test.loadbalancer.server.port=80"
+      - "com.qwen.service=frontend"
+      - "com.qwen.environment=production-test"
+      - "com.qwen.version=2.0.0"
+
+networks:
+  qwen-dev:
+    driver: bridge
+    name: qwen-dev-network
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  # Development node_modules volume for faster rebuilds
+  frontend-dev-node-modules:
+    driver: local
+    labels:
+      - "com.qwen.volume.description=Frontend development node_modules"
+      - "com.qwen.volume.environment=development"
