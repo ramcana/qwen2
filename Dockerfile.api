@@ -1,58 +1,134 @@
-# Dockerfile for Qwen-Image API Server with DiffSynth Enhanced UI
-FROM python:3.10-slim
+# Multi-stage Dockerfile for Qwen-Image API Server with DiffSynth Integration
+# Stage 1: Build dependencies and prepare environment
+FROM python:3.11-slim AS builder
 
-# Set environment variables
+# Set build environment variables
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
-ENV PYTHONPATH=/app/src
+ENV PIP_NO_CACHE_DIR=1
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    build-essential \
+    pkg-config \
+    libffi-dev \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create virtual environment for dependency isolation
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Copy requirements and install Python dependencies in stages
+COPY requirements-docker.txt ./
+RUN pip install --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir -r requirements-docker.txt && \
+    pip install --no-cache-dir --no-build-isolation flash_attn==2.8.3 || echo "flash_attn installation failed, continuing without it" && \
+    pip install --no-cache-dir xformers==0.0.32.post2 || echo "xformers installation failed, continuing without it" && \
+    pip install --no-cache-dir bitsandbytes==0.47.0 || echo "bitsandbytes installation failed, continuing without it"
+
+# Stage 2: Runtime environment
+FROM python:3.11-slim AS runtime
+
+# Set runtime environment variables
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app/src:/app/DiffSynth-Studio
 ENV HF_HOME=/app/cache/huggingface
 ENV TORCH_HOME=/app/cache/torch
+ENV DIFFSYNTH_CACHE_DIR=/app/cache/diffsynth
+ENV CONTROLNET_CACHE_DIR=/app/cache/controlnet
 
-# Install system dependencies including DiffSynth requirements
+# Define build arguments with defaults for runtime configuration
+ARG CUDA_VISIBLE_DEVICES=0
+ARG ENABLE_DIFFSYNTH=true
+ARG ENABLE_CONTROLNET=true
+ARG MEMORY_OPTIMIZATION=true
+ARG TILED_PROCESSING_THRESHOLD=1024
+
+# Set environment variables from build arguments
+ENV CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}
+ENV ENABLE_DIFFSYNTH=${ENABLE_DIFFSYNTH}
+ENV ENABLE_CONTROLNET=${ENABLE_CONTROLNET}
+ENV MEMORY_OPTIMIZATION=${MEMORY_OPTIMIZATION}
+ENV TILED_PROCESSING_THRESHOLD=${TILED_PROCESSING_THRESHOLD}
+
+# Install runtime system dependencies
 RUN apt-get update && apt-get install -y \
     git \
     wget \
     curl \
-    build-essential \
-    libgl1-mesa-glx \
+    libgl1-mesa-dri \
+    libgl1-mesa-dev \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
     libxrender-dev \
     libgomp1 \
     ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
+    libfontconfig1 \
+    libxss1 \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
-# Create app directory
+# Copy virtual environment from builder stage
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Create app directory and non-root user for security
+RUN groupadd -r appuser && useradd -r -g appuser appuser
 WORKDIR /app
 
-# Copy requirements and install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy source code
-COPY src/ ./src/
-COPY configs/ ./configs/
-COPY models/ ./models/
-COPY generated_images/ ./generated_images/
-COPY uploads/ ./uploads/
-COPY cache/ ./cache/
-
-# Create directories for DiffSynth Enhanced UI
-RUN mkdir -p /app/generated_images \
-             /app/uploads \
-             /app/cache/huggingface \
+# Create cache and data directories with proper permissions
+RUN mkdir -p /app/cache/huggingface \
              /app/cache/torch \
+             /app/cache/diffsynth \
+             /app/cache/controlnet \
              /app/models/diffsynth \
              /app/models/controlnet \
-             /app/offload
+             /app/generated_images \
+             /app/uploads \
+             /app/offload \
+             /app/logs \
+    && chown -R appuser:appuser /app
+
+# Clone and setup DiffSynth-Studio submodule with proper error handling
+RUN git clone --depth 1 --branch main https://github.com/modelscope/DiffSynth-Studio.git /app/DiffSynth-Studio || \
+    (echo "Failed to clone DiffSynth-Studio, using existing directory if available" && exit 0)
+
+# Install DiffSynth-Studio in development mode if directory exists
+RUN if [ -d "/app/DiffSynth-Studio" ]; then \
+        cd /app/DiffSynth-Studio && \
+        pip install -e . --no-deps; \
+    fi
+
+# Copy application source code and entrypoint script
+COPY --chown=appuser:appuser src/ ./src/
+COPY --chown=appuser:appuser configs/ ./configs/
+COPY --chown=appuser:appuser docker-entrypoint.sh ./
+RUN chmod +x docker-entrypoint.sh
+
+# Copy existing models, uploads, and cache if they exist (optional)
+# Note: These directories will be created at runtime if they don't exist during build
+
+# Switch to non-root user
+USER appuser
 
 # Expose port
 EXPOSE 8000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+# Health check with improved error handling
+HEALTHCHECK --interval=30s --timeout=15s --start-period=120s --retries=3 \
+    CMD curl -f http://localhost:8000/health || \
+        (echo "Health check failed at $(date)" && exit 1)
 
-# Start the API server
-CMD ["python", "src/api_server.py"]
+# GPU runtime configuration (requires nvidia-docker runtime)
+LABEL com.nvidia.volumes.needed="nvidia_driver"
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
+# Set entrypoint and default command
+ENTRYPOINT ["./docker-entrypoint.sh"]
+CMD ["python", "-u", "src/api_server.py"]

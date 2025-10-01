@@ -1,0 +1,128 @@
+# Traefik Docker Compose Configuration
+# This file defines the Traefik reverse proxy service for the Qwen2 application
+
+version: "3.8"
+
+services:
+  traefik:
+    image: traefik:v3.0
+    container_name: qwen-traefik
+    restart: unless-stopped
+
+    # Command line arguments (alternative to config file)
+    command:
+      - --api.dashboard=true
+      - --api.debug=true
+      - --log.level=INFO
+      - --log.format=json
+      - --accesslog=true
+      - --accesslog.format=json
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.traefik.address=:8080
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=qwen-network
+      - --providers.file.filename=/etc/traefik/dynamic.yml
+      - --providers.file.watch=true
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+      - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-admin@localhost}
+      - --certificatesresolvers.letsencrypt.acme.storage=/acme.json
+      - --certificatesresolvers.selfsigned.acme.httpchallenge=true
+      - --certificatesresolvers.selfsigned.acme.httpchallenge.entrypoint=web
+      - --certificatesresolvers.selfsigned.acme.email=dev@localhost
+      - --certificatesresolvers.selfsigned.acme.storage=/acme-dev.json
+      - --certificatesresolvers.selfsigned.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory
+      - --metrics.prometheus=true
+      - --metrics.prometheus.addEntryPointsLabels=true
+      - --metrics.prometheus.addServicesLabels=true
+      - --global.checknewversion=false
+      - --global.sendanonymoususage=false
+
+    ports:
+      - "80:80" # HTTP
+      - "443:443" # HTTPS
+      - "8080:8080" # Traefik Dashboard
+
+    volumes:
+      # Docker socket for service discovery
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+      # Configuration files
+      - ./config/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./config/traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
+
+      # SSL certificates storage
+      - ./ssl/acme.json:/acme.json
+      - ./ssl/acme-dev.json:/acme-dev.json
+
+      # Logs
+      - ./logs/traefik:/var/log/traefik
+
+      # Custom certificates (for development)
+      - ./ssl/certs:/etc/ssl/certs:ro
+      - ./ssl/private:/etc/ssl/private:ro
+
+    environment:
+      - ACME_EMAIL=${ACME_EMAIL:-admin@localhost}
+      - TRAEFIK_DOMAIN=${TRAEFIK_DOMAIN:-traefik.localhost}
+      - APP_DOMAIN=${APP_DOMAIN:-app.localhost}
+      - API_DOMAIN=${API_DOMAIN:-api.localhost}
+
+    labels:
+      # Traefik dashboard configuration
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`${TRAEFIK_DOMAIN:-traefik.localhost}`)"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.tls.certresolver=selfsigned"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.middlewares=dashboard-auth@file"
+
+      # HTTP to HTTPS redirect
+      - "traefik.http.routers.dashboard-http.rule=Host(`${TRAEFIK_DOMAIN:-traefik.localhost}`)"
+      - "traefik.http.routers.dashboard-http.entrypoints=web"
+      - "traefik.http.routers.dashboard-http.middlewares=redirect-to-https@internal"
+
+    networks:
+      - qwen-network
+      - traefik-public
+
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    security_opt:
+      - no-new-privileges:true
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+        reservations:
+          memory: 256M
+          cpus: "0.25"
+
+networks:
+  qwen-network:
+    name: qwen-network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+  traefik-public:
+    name: traefik-public
+    driver: bridge
+    external: true
+
+volumes:
+  traefik-logs:
+    name: traefik-logs
+  traefik-ssl:
+    name: traefik-ssl

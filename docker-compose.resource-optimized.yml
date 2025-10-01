@@ -1,0 +1,245 @@
+# =============================================================================
+# Resource-Optimized Docker Compose Override for Qwen2 Image Generation
+# =============================================================================
+# This configuration provides enhanced resource management when used with
+# the base docker-compose.yml file. Use with:
+# docker-compose -f docker-compose.yml -f docker-compose.resource-optimized.yml up
+# =============================================================================
+
+services:
+  # ==========================================================================
+  # Enhanced API Server Resource Management
+  # ==========================================================================
+  api:
+    # Enhanced resource constraints
+    deploy:
+      resources:
+        limits:
+          memory: 12G
+          cpus: "6.0"
+        reservations:
+          memory: 6G
+          cpus: "3.0"
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+      restart_policy:
+        condition: on-failure
+        delay: 30s
+        max_attempts: 3
+        window: 180s
+
+    # Additional GPU memory optimization environment
+    environment:
+      # Enhanced GPU memory management
+      - GPU_MEMORY_FRACTION=0.85
+      - ENABLE_MEMORY_EFFICIENT_ATTENTION=true
+      - GRADIENT_CHECKPOINTING=true
+
+      # Cache management
+      - CACHE_CLEANUP_INTERVAL=3600
+      - MAX_CACHE_SIZE=8GB
+      - ENABLE_CACHE_COMPRESSION=true
+
+      # Performance monitoring
+      - ENABLE_PERFORMANCE_MONITORING=true
+      - MEMORY_MONITORING_INTERVAL=30
+      - GPU_MONITORING_INTERVAL=15
+
+      # Automatic cleanup settings
+      - AUTO_CLEANUP_ENABLED=true
+      - CLEANUP_TEMP_FILES_INTERVAL=1800
+      - CLEANUP_OLD_MODELS_DAYS=30
+      - CLEANUP_GENERATED_IMAGES_DAYS=7
+
+    # System limits for performance
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+      nproc:
+        soft: 32768
+        hard: 32768
+
+    # tmpfs inherited from base configuration
+
+    # Enhanced logging with structured format
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+        compress: "true"
+        labels: "service,environment,gpu,resource-optimized"
+        tag: "{{.Name}}/{{.FullID}}"
+
+  # ==========================================================================
+  # Enhanced Frontend Resource Management
+  # ==========================================================================
+  frontend:
+    # Strict resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: "0.5"
+        reservations:
+          memory: 128m
+          cpus: "0.25"
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 60s
+
+    # Optimized logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "25m"
+        max-file: "3"
+        compress: "true"
+        labels: "service,environment,resource-optimized"
+        tag: "{{.Name}}/{{.FullID}}"
+
+    # tmpfs mounts inherited from base configuration
+
+  # ==========================================================================
+  # Enhanced Traefik Resource Management
+  # ==========================================================================
+  traefik:
+    # Enhanced resource constraints
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: "0.5"
+        reservations:
+          memory: 128m
+          cpus: "0.25"
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 60s
+
+    # Optimized logging with rotation
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "25m"
+        max-file: "3"
+        compress: "true"
+        labels: "service,environment,resource-optimized"
+        tag: "{{.Name}}/{{.FullID}}"
+
+    # Temporary filesystem for cache
+    tmpfs:
+      - /tmp:size=100m,noexec,nosuid,nodev
+      - /var/cache/traefik:size=50m,noexec,nosuid,nodev
+
+  # ==========================================================================
+  # Resource Monitor Service
+  # ==========================================================================
+  resource-monitor:
+    image: prom/node-exporter:latest
+    container_name: qwen-resource-monitor
+    restart: unless-stopped
+
+    # Minimal resource usage
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+          cpus: "0.25"
+        reservations:
+          memory: 64m
+          cpus: "0.1"
+
+    # Monitor host resources
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.rootfs=/rootfs"
+      - "--path.sysfs=/host/sys"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+
+    networks:
+      - qwen-network
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.metrics.rule=Host(`metrics.localhost`)"
+      - "traefik.http.services.metrics.loadbalancer.server.port=9100"
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "2"
+        compress: "true"
+
+  # ==========================================================================
+  # Cleanup Service (Cron-like)
+  # ==========================================================================
+  cleanup-service:
+    image: alpine:latest
+    container_name: qwen-cleanup-service
+    restart: unless-stopped
+
+    # Minimal resources
+    deploy:
+      resources:
+        limits:
+          memory: 64m
+          cpus: "0.1"
+
+    # Mount cleanup scripts and data directories
+    volumes:
+      - ./scripts/resource-cleanup.sh:/usr/local/bin/resource-cleanup.sh:ro
+      - ./cache:/app/cache
+      - ./logs:/app/logs
+      - ./generated_images:/app/generated_images
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+    # Install required packages and run cleanup periodically
+    command: |
+      sh -c "
+        apk add --no-cache docker-cli curl bash &&
+        chmod +x /usr/local/bin/resource-cleanup.sh &&
+        while true; do
+          echo 'Running scheduled cleanup...' &&
+          /usr/local/bin/resource-cleanup.sh --verbose &&
+          echo 'Cleanup completed, sleeping for 1 hour...' &&
+          sleep 3600
+        done
+      "
+
+    networks:
+      - qwen-network
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "2"
+        compress: "true"
+
+# =============================================================================
+# Resource Management Labels
+# =============================================================================
+x-resource-labels: &resource-labels
+  com.qwen.project: "qwen2-image-generation"
+  com.qwen.version: "2.0.0"
+  com.qwen.environment: "resource-optimized"
+  com.qwen.resource-management: "enabled"
+  com.qwen.auto-cleanup: "enabled"
+  com.qwen.monitoring: "enabled"

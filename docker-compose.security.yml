@@ -1,0 +1,567 @@
+# =============================================================================
+# Security-Enhanced Docker Compose Configuration for Qwen2 Application
+# =============================================================================
+# This configuration extends the base setup with comprehensive security features:
+# - Network isolation with multiple security zones
+# - Non-root user configurations
+# - Secrets management integration
+# - Enhanced security headers and CORS
+# - Comprehensive access controls and monitoring
+# =============================================================================
+
+version: "3.8"
+
+# Import secrets configuration
+include:
+  - config/docker/secrets.yml
+
+services:
+  # ==========================================================================
+  # Traefik Reverse Proxy with Enhanced Security
+  # ==========================================================================
+  traefik:
+    image: traefik:v3.0
+    container_name: qwen-traefik-secure
+    restart: unless-stopped
+
+    # Security: Run as non-root user
+    user: "1000:1000"
+
+    # Port mappings (only necessary ports)
+    ports:
+      - "80:80" # HTTP (redirects to HTTPS)
+      - "443:443" # HTTPS
+      - "8080:8080" # Dashboard (IP restricted)
+
+    # Environment variables with security focus
+    environment:
+      - TRAEFIK_LOG_LEVEL=WARN
+      - TRAEFIK_API_DASHBOARD=true
+      - TRAEFIK_API_INSECURE=false
+      - TRAEFIK_ACCESSLOG=true
+      - TRAEFIK_METRICS_PROMETHEUS=true
+
+    # Volume mounts with security considerations
+    volumes:
+      # Docker socket (read-only)
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+      # Configuration files (read-only)
+      - ./config/docker/traefik-security.yml:/etc/traefik/traefik.yml:ro
+      - ./config/docker/dynamic-security.yml:/etc/traefik/dynamic-security.yml:ro
+
+      # SSL certificates and ACME data
+      - ./ssl:/etc/ssl:ro
+      - ./acme.json:/acme.json
+
+      # Logs directory
+      - traefik-logs:/var/log/traefik
+
+      # Authentication files
+      - ./config/traefik/users:/etc/traefik/users:ro
+
+    # Networks with security zones
+    networks:
+      - qwen-frontend
+      - qwen-mgmt
+      - traefik-public
+
+    # Security labels and constraints
+    labels:
+      - "traefik.enable=true"
+      - "traefik.constraint-label=qwen-public"
+      - "traefik.docker.network=qwen-frontend"
+
+      # Dashboard routing with security
+      - "traefik.http.routers.traefik-dashboard.rule=Host(`dashboard.localhost`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))"
+      - "traefik.http.routers.traefik-dashboard.service=api@internal"
+      - "traefik.http.routers.traefik-dashboard.middlewares=dashboard-auth@file,ip-whitelist-admin@file"
+      - "traefik.http.routers.traefik-dashboard.tls=true"
+
+    # Enhanced health check
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+      - seccomp:unconfined
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: "0.5"
+        reservations:
+          memory: 128m
+          cpus: "0.25"
+
+    # Read-only root filesystem
+    read_only: true
+    tmpfs:
+      - /tmp:size=100m,mode=1777,noexec,nosuid,nodev
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+        compress: "true"
+
+  # ==========================================================================
+  # API Server with Security Enhancements
+  # ==========================================================================
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+      args:
+        - ENABLE_GPU=true
+        - PYTHON_VERSION=3.11
+        - SECURITY_HARDENED=true
+    image: qwen-api:secure
+    container_name: qwen-api-secure
+    restart: unless-stopped
+
+    # Security: Run as non-root user
+    user: "1001:1001"
+
+    # Environment variables with secrets
+    environment:
+      # Application settings
+      - PYTHONPATH=/app/src:/app/DiffSynth-Studio
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+
+      # Security settings
+      - SECURITY_HARDENED=true
+      - ENABLE_CORS=true
+      - CORS_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
+      - CORS_ALLOW_CREDENTIALS=false
+      - SECURE_COOKIES=true
+      - SESSION_COOKIE_SECURE=true
+      - SESSION_COOKIE_HTTPONLY=true
+      - SESSION_COOKIE_SAMESITE=strict
+
+      # GPU and CUDA settings
+      - CUDA_VISIBLE_DEVICES=0
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
+      # Cache directories
+      - HF_HOME=/app/cache/huggingface
+      - TORCH_HOME=/app/cache/torch
+      - DIFFSYNTH_CACHE_DIR=/app/cache/diffsynth
+
+      # Feature flags
+      - ENABLE_DIFFSYNTH=true
+      - ENABLE_CONTROLNET=true
+
+      # Performance and security
+      - MEMORY_OPTIMIZATION=true
+      - TILED_PROCESSING_THRESHOLD=2048
+      - MAX_BATCH_SIZE=4
+      - REQUEST_TIMEOUT=300
+      - MAX_REQUEST_SIZE=100MB
+
+      # Logging and monitoring
+      - LOG_LEVEL=INFO
+      - LOG_FORMAT=json
+      - ENABLE_AUDIT_LOGGING=true
+      - SECURITY_MONITORING=true
+
+    # Secrets integration
+    secrets:
+      - api_secret_key
+      - jwt_secret_key
+      - huggingface_token
+
+    # Volume mounts with security
+    volumes:
+      # Application data (with proper permissions)
+      - type: bind
+        source: ./models
+        target: /app/models
+        read_only: false
+        bind:
+          propagation: shared
+
+      - type: bind
+        source: ./cache
+        target: /app/cache
+        read_only: false
+        bind:
+          propagation: shared
+
+      - type: bind
+        source: ./generated_images
+        target: /app/generated_images
+        read_only: false
+        bind:
+          propagation: shared
+
+      - type: bind
+        source: ./uploads
+        target: /app/uploads
+        read_only: false
+        bind:
+          propagation: shared
+
+      # Configuration (read-only)
+      - ./configs:/app/configs:ro
+
+      # Logs
+      - api-logs:/app/logs
+
+    # Networks (isolated backend)
+    networks:
+      - qwen-backend
+      - qwen-data
+
+    # Service dependencies
+    depends_on:
+      traefik:
+        condition: service_healthy
+
+    # Security labels
+    labels:
+      - "traefik.enable=true"
+      - "traefik.constraint-label=qwen-public"
+      - "traefik.docker.network=qwen-backend"
+
+      # API routing with security middleware
+      - "traefik.http.routers.api-secure.rule=Host(`api.localhost`) || PathPrefix(`/api`)"
+      - "traefik.http.routers.api-secure.service=api-secure"
+      - "traefik.http.routers.api-secure.middlewares=api-security-headers@file,rate-limit-api@file,secure-compression@file"
+      - "traefik.http.services.api-secure.loadbalancer.server.port=8000"
+
+      # Health check routing
+      - "traefik.http.routers.api-health.rule=Path(`/health`)"
+      - "traefik.http.routers.api-health.service=api-secure"
+      - "traefik.http.routers.api-health.middlewares=rate-limit-strict@file"
+
+    # Enhanced health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 120s
+
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+      - seccomp:unconfined
+
+    # Capability management
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+
+    # Resource limits with GPU
+    deploy:
+      resources:
+        limits:
+          memory: 12G
+          cpus: "6.0"
+        reservations:
+          memory: 6G
+          cpus: "3.0"
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    # Temporary filesystems
+    tmpfs:
+      - /tmp:size=1G,mode=1777,noexec,nosuid,nodev
+
+    # System limits
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+        compress: "true"
+        labels: "service,environment,security"
+
+  # ==========================================================================
+  # Frontend with Security Hardening
+  # ==========================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - NODE_ENV=production
+        - REACT_APP_API_URL=/api
+        - SECURITY_HARDENED=true
+    image: qwen-frontend:secure
+    container_name: qwen-frontend-secure
+    restart: unless-stopped
+
+    # Security: Run as non-root user
+    user: "1002:1002"
+
+    # Environment variables
+    environment:
+      - NODE_ENV=production
+      - NGINX_HOST=localhost
+      - NGINX_PORT=80
+      - SECURITY_HEADERS_ENABLED=true
+
+    # Networks (DMZ)
+    networks:
+      - qwen-frontend
+
+    # Service dependencies
+    depends_on:
+      api:
+        condition: service_healthy
+
+    # Security labels
+    labels:
+      - "traefik.enable=true"
+      - "traefik.constraint-label=qwen-public"
+      - "traefik.docker.network=qwen-frontend"
+
+      # Frontend routing with security
+      - "traefik.http.routers.frontend-secure.rule=Host(`qwen.localhost`) || Host(`localhost`)"
+      - "traefik.http.routers.frontend-secure.service=frontend-secure"
+      - "traefik.http.routers.frontend-secure.middlewares=enhanced-security-headers@file,rate-limit-strict@file,secure-compression@file"
+      - "traefik.http.services.frontend-secure.loadbalancer.server.port=80"
+
+      # Static assets with caching
+      - "traefik.http.routers.static-secure.rule=Host(`qwen.localhost`) && PathPrefix(`/static`)"
+      - "traefik.http.routers.static-secure.service=frontend-secure"
+      - "traefik.http.routers.static-secure.middlewares=static-security@file"
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+
+    # Read-only root filesystem
+    read_only: true
+    tmpfs:
+      - /tmp:size=100m,mode=1777,noexec,nosuid,nodev
+      - /var/cache/nginx:size=100m,mode=755,noexec,nosuid,nodev
+      - /var/run:size=10m,mode=755,noexec,nosuid,nodev
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: "0.5"
+        reservations:
+          memory: 128m
+          cpus: "0.25"
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+        compress: "true"
+
+  # ==========================================================================
+  # Redis with Security Configuration
+  # ==========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: qwen-redis-secure
+    restart: unless-stopped
+
+    # Security: Run as non-root user
+    user: "999:999"
+
+    # Environment variables
+    environment:
+      - REDIS_PASSWORD_FILE=/run/secrets/redis_password
+
+    # Secrets
+    secrets:
+      - redis_password
+
+    # Volume mounts
+    volumes:
+      - redis-data:/data
+      - ./config/redis/redis-security.conf:/usr/local/etc/redis/redis.conf:ro
+
+    # Networks (data layer)
+    networks:
+      - qwen-data
+
+    # Command with security configuration
+    command:
+      [
+        "redis-server",
+        "/usr/local/etc/redis/redis.conf",
+        "--requirepass-file",
+        "/run/secrets/redis_password",
+      ]
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "redis-cli", "--no-auth-warning", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "0.5"
+
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "25m"
+        max-file: "3"
+        compress: "true"
+
+# =============================================================================
+# Secure Network Configuration
+# =============================================================================
+networks:
+  # Frontend DMZ network
+  qwen-frontend:
+    driver: bridge
+    name: qwen-frontend-secure
+    ipam:
+      config:
+        - subnet: 172.20.1.0/24
+          gateway: 172.20.1.1
+    driver_opts:
+      com.docker.network.bridge.enable_icc: "false"
+      com.docker.network.bridge.enable_ip_masquerade: "true"
+    labels:
+      - "com.qwen.network.zone=dmz"
+      - "com.qwen.network.security=public"
+
+  # Backend internal network
+  qwen-backend:
+    driver: bridge
+    name: qwen-backend-secure
+    internal: false # Needs external access for model downloads
+    ipam:
+      config:
+        - subnet: 172.20.2.0/24
+          gateway: 172.20.2.1
+    driver_opts:
+      com.docker.network.bridge.enable_icc: "true"
+    labels:
+      - "com.qwen.network.zone=internal"
+      - "com.qwen.network.security=private"
+
+  # Data layer network
+  qwen-data:
+    driver: bridge
+    name: qwen-data-secure
+    internal: true # No external access
+    ipam:
+      config:
+        - subnet: 172.20.3.0/24
+          gateway: 172.20.3.1
+    driver_opts:
+      com.docker.network.bridge.enable_icc: "true"
+    labels:
+      - "com.qwen.network.zone=data"
+      - "com.qwen.network.security=restricted"
+
+  # Management network
+  qwen-mgmt:
+    driver: bridge
+    name: qwen-mgmt-secure
+    ipam:
+      config:
+        - subnet: 172.20.4.0/24
+          gateway: 172.20.4.1
+    labels:
+      - "com.qwen.network.zone=management"
+      - "com.qwen.network.security=admin"
+
+  # External Traefik network
+  traefik-public:
+    external: true
+    name: traefik-public
+
+# =============================================================================
+# Secure Volume Configuration
+# =============================================================================
+volumes:
+  # Application data volumes
+  redis-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/redis
+    labels:
+      - "com.qwen.volume.security=restricted"
+
+  api-logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./logs/api
+    labels:
+      - "com.qwen.volume.security=audit"
+
+  traefik-logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./logs/traefik
+    labels:
+      - "com.qwen.volume.security=audit"
+
+# =============================================================================
+# Security Configuration Labels
+# =============================================================================
+x-security-labels: &security-labels
+  com.qwen.project: "qwen2-image-generation"
+  com.qwen.version: "2.0.0-secure"
+  com.qwen.environment: "production"
+  com.qwen.security.hardened: "true"
+  com.qwen.security.level: "high"
+  com.qwen.compliance.owasp: "enabled"
+  com.qwen.compliance.cis: "enabled"

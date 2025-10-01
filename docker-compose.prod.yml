@@ -1,0 +1,460 @@
+# =============================================================================
+# Production Docker Compose Configuration for Qwen2 Image Generation
+# =============================================================================
+# This configuration extends the base docker-compose.yml for production:
+# - SSL/TLS termination with Let's Encrypt
+# - Enhanced security configurations
+# - Strict resource limits and monitoring
+# - High availability and scaling
+# - Production logging and metrics
+# - Performance optimizations
+# =============================================================================
+
+version: "3.8"
+
+services:
+  # ==========================================================================
+  # Traefik Production Configuration
+  # ==========================================================================
+  traefik:
+    # Production resource limits (strict)
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: "0.5"
+        reservations:
+          memory: 128m
+          cpus: "0.25"
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 3
+        window: 60s
+
+    environment:
+      - TRAEFIK_LOG_LEVEL=WARN
+      - TRAEFIK_API_DASHBOARD=false
+      - TRAEFIK_API_INSECURE=false
+      - TRAEFIK_ACCESSLOG=true
+      - TRAEFIK_ACCESSLOG_FORMAT=json
+      - TRAEFIK_METRICS_PROMETHEUS=true
+
+    volumes:
+      - ./config/docker/traefik.prod.yml:/etc/traefik/traefik.yml:ro
+      - ./ssl:/ssl:ro
+
+    ports:
+      - "80:80"
+      - "443:443"
+    labels:
+      # Production dashboard with authentication
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik-dashboard.rule=Host(`dashboard.yourdomain.com`)"
+      - "traefik.http.routers.traefik-dashboard.service=api@internal"
+      - "traefik.http.routers.traefik-dashboard.tls=true"
+      - "traefik.http.routers.traefik-dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.traefik-dashboard.middlewares=dashboard-auth"
+      - "traefik.http.middlewares.dashboard-auth.basicauth.users=admin:$$2y$$10$$K8V2VzxEOJQBQjjfv7S4/.k8VKyohAyIUWH5HBslZOOF8XfLQN5S2"
+
+    # Production logging (optimized)
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+        compress: "true"
+        labels: "service,environment,version"
+        tag: "{{.Name}}/{{.FullID}}"
+
+  # ==========================================================================
+  # API Production Configuration
+  # ==========================================================================
+  api:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+          memory: 8G
+          cpus: "4.0"
+        limits:
+          memory: 12G
+          cpus: "6.0"
+      restart_policy:
+        condition: on-failure
+        delay: 30s
+        max_attempts: 3
+        window: 120s
+      update_config:
+        parallelism: 1
+        delay: 30s
+        failure_action: rollback
+        order: start-first
+      placement:
+        constraints:
+          - node.role == worker
+          - node.labels.gpu == true
+
+    environment:
+      # Production settings
+      - NODE_ENV=production
+      - DEBUG=false
+      - LOG_LEVEL=INFO
+      - API_WORKERS=2
+
+      # Production security
+      - CORS_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
+      - CORS_ALLOW_CREDENTIALS=false
+      - SECURE_COOKIES=true
+      - HTTPS_ONLY=true
+
+      # Production performance
+      - MEMORY_OPTIMIZATION=true
+      - TILED_PROCESSING_THRESHOLD=4096
+      - MAX_BATCH_SIZE=8
+      - ATTENTION_OPTIMIZATION=true
+
+      # Production cache settings
+      - CACHE_TTL=3600
+      - MODEL_CACHE_SIZE=8GB
+      - ENABLE_REDIS_CACHE=true
+      - REDIS_URL=redis://redis:6379/0
+
+    # Production volume configuration
+    volumes:
+      # Read-only configuration
+      - ./configs:/app/configs:ro
+
+      # Production data directories with specific mount options
+      - type: bind
+        source: ./models
+        target: /app/models
+        read_only: false
+        bind:
+          propagation: shared
+
+      - type: bind
+        source: ./cache
+        target: /app/cache
+        read_only: false
+        bind:
+          propagation: shared
+
+      - type: bind
+        source: ./generated_images
+        target: /app/generated_images
+        read_only: false
+        bind:
+          propagation: shared
+
+      - type: bind
+        source: ./uploads
+        target: /app/uploads
+        read_only: false
+        bind:
+          propagation: shared
+
+    # Production labels with SSL
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=qwen-network"
+
+      # HTTPS API routes
+      - "traefik.http.routers.api-secure.rule=Host(`api.yourdomain.com`) || (Host(`yourdomain.com`) && PathPrefix(`/api`))"
+      - "traefik.http.routers.api-secure.service=api"
+      - "traefik.http.routers.api-secure.tls=true"
+      - "traefik.http.routers.api-secure.tls.certresolver=letsencrypt"
+      - "traefik.http.services.api.loadbalancer.server.port=8000"
+
+      # Production middleware stack
+      - "traefik.http.routers.api-secure.middlewares=api-security,api-ratelimit,api-compress"
+
+      # Security headers
+      - "traefik.http.middlewares.api-security.headers.frameDeny=true"
+      - "traefik.http.middlewares.api-security.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.api-security.headers.browserXssFilter=true"
+      - "traefik.http.middlewares.api-security.headers.referrerPolicy=strict-origin-when-cross-origin"
+      - "traefik.http.middlewares.api-security.headers.forceSTSHeader=true"
+      - "traefik.http.middlewares.api-security.headers.stsSeconds=31536000"
+      - "traefik.http.middlewares.api-security.headers.stsIncludeSubdomains=true"
+      - "traefik.http.middlewares.api-security.headers.stsPreload=true"
+
+      # Rate limiting
+      - "traefik.http.middlewares.api-ratelimit.ratelimit.burst=20"
+      - "traefik.http.middlewares.api-ratelimit.ratelimit.average=10"
+
+      # Compression
+      - "traefik.http.middlewares.api-compress.compress=true"
+
+    # Production health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 300s
+
+    # Production logging (structured and optimized)
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "10"
+        compress: "true"
+        labels: "service,environment,version,gpu"
+        tag: "{{.Name}}/{{.FullID}}"
+
+    # Production security and performance
+    security_opt:
+      - no-new-privileges:true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      stack: 67108864
+
+  # ==========================================================================
+  # Frontend Production Configuration
+  # ==========================================================================
+  frontend:
+    deploy:
+      resources:
+        reservations:
+          memory: 128m
+          cpus: "0.25"
+        limits:
+          memory: 256m
+          cpus: "0.5"
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 3
+        window: 60s
+      update_config:
+        parallelism: 2
+        delay: 10s
+        failure_action: rollback
+        order: start-first
+      placement:
+        constraints:
+          - node.role == worker
+
+    environment:
+      - NODE_ENV=production
+      - NGINX_HOST=yourdomain.com
+      - NGINX_PORT=80
+
+    # Production labels with SSL
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=qwen-network"
+
+      # HTTPS frontend routes
+      - "traefik.http.routers.frontend-secure.rule=Host(`yourdomain.com`) || Host(`www.yourdomain.com`)"
+      - "traefik.http.routers.frontend-secure.service=frontend"
+      - "traefik.http.routers.frontend-secure.tls=true"
+      - "traefik.http.routers.frontend-secure.tls.certresolver=letsencrypt"
+      - "traefik.http.services.frontend.loadbalancer.server.port=80"
+
+      # Production middleware
+      - "traefik.http.routers.frontend-secure.middlewares=frontend-security,frontend-compress,frontend-cache"
+
+      # Enhanced security headers
+      - "traefik.http.middlewares.frontend-security.headers.frameDeny=true"
+      - "traefik.http.middlewares.frontend-security.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.frontend-security.headers.browserXssFilter=true"
+      - "traefik.http.middlewares.frontend-security.headers.referrerPolicy=strict-origin-when-cross-origin"
+      - "traefik.http.middlewares.frontend-security.headers.forceSTSHeader=true"
+      - "traefik.http.middlewares.frontend-security.headers.stsSeconds=31536000"
+      - "traefik.http.middlewares.frontend-security.headers.stsIncludeSubdomains=true"
+      - "traefik.http.middlewares.frontend-security.headers.stsPreload=true"
+      - "traefik.http.middlewares.frontend-security.headers.contentSecurityPolicy=default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' wss: https:;"
+
+      # Compression
+      - "traefik.http.middlewares.frontend-compress.compress=true"
+
+      # Caching for static assets
+      - "traefik.http.middlewares.frontend-cache.headers.customrequestheaders.Cache-Control=public, max-age=31536000"
+
+    # Production health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+    # Production logging (optimized for frontend)
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "25m"
+        max-file: "5"
+        compress: "true"
+        labels: "service,environment,version"
+        tag: "{{.Name}}/{{.FullID}}"
+
+  # ==========================================================================
+  # Production Support Services
+  # ==========================================================================
+
+  # Redis for production caching and session storage
+  redis:
+    image: redis:7-alpine
+    container_name: qwen-redis-prod
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          memory: 512m
+          cpus: "0.5"
+        limits:
+          memory: 1G
+          cpus: "1.0"
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 30s
+      placement:
+        constraints:
+          - node.role == worker
+    volumes:
+      - redis-prod-data:/data
+      - ./config/redis/redis.prod.conf:/usr/local/etc/redis/redis.conf:ro
+    networks:
+      - qwen-network
+    command: redis-server /usr/local/etc/redis/redis.conf
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        compress: "true"
+        labels: "service,environment"
+        tag: "{{.Name}}/{{.FullID}}"
+    security_opt:
+      - no-new-privileges:true
+
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: qwen-prometheus-prod
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "1.0"
+    volumes:
+      - ./config/prometheus/prometheus.prod.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - qwen-network
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+      - "--storage.tsdb.retention.time=30d"
+      - "--web.enable-lifecycle"
+    profiles:
+      - monitoring
+
+  # Grafana for metrics visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: qwen-grafana-prod
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "0.5"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=secure_admin_password
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_DOMAIN=monitoring.yourdomain.com
+      - GF_SERVER_ROOT_URL=https://monitoring.yourdomain.com
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./config/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./config/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    networks:
+      - qwen-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`monitoring.yourdomain.com`)"
+      - "traefik.http.routers.grafana.service=grafana"
+      - "traefik.http.routers.grafana.tls=true"
+      - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+    profiles:
+      - monitoring
+
+# =============================================================================
+# Production Networks
+# =============================================================================
+networks:
+  qwen-network:
+    driver: bridge
+    name: qwen-network-prod
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
+
+  traefik-public:
+    external: true
+    name: traefik-public
+
+# =============================================================================
+# Production Volumes
+# =============================================================================
+volumes:
+  # Production Redis data
+  redis-prod-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/redis
+    labels:
+      - "com.qwen.volume.description=Redis production data"
+
+  # Monitoring data
+  prometheus-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/prometheus
+    labels:
+      - "com.qwen.volume.description=Prometheus metrics data"
+
+  grafana-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/grafana
+    labels:
+      - "com.qwen.volume.description=Grafana dashboard data"
+
+# =============================================================================
+# Production Configuration Labels
+# =============================================================================
+x-production-labels: &prod-labels
+  com.qwen.project: "qwen2-image-generation"
+  com.qwen.version: "2.0.0"
+  com.qwen.environment: "production"
+  com.qwen.maintainer: "Qwen Team"
+  com.qwen.ssl: "enabled"
+  com.qwen.monitoring: "enabled"

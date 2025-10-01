@@ -1,0 +1,169 @@
+# Traefik Production Docker Compose Configuration
+# Optimized for production deployment with enhanced security and monitoring
+
+version: "3.8"
+
+services:
+  traefik:
+    image: traefik:v3.0
+    container_name: qwen-traefik-prod
+    restart: unless-stopped
+
+    # Use configuration file for production
+    volumes:
+      # Docker socket for service discovery (read-only)
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+      # Configuration files
+      - ./config/traefik/traefik.prod.yml:/etc/traefik/traefik.yml:ro
+      - ./config/traefik/dynamic.prod.yml:/etc/traefik/dynamic.prod.yml:ro
+
+      # SSL certificates storage (persistent)
+      - traefik-ssl:/ssl
+      - ./ssl/acme.json:/acme.json
+
+      # Logs (persistent)
+      - traefik-logs:/var/log/traefik
+
+      # Custom certificates (if needed)
+      - ./ssl/certs:/etc/ssl/certs:ro
+      - ./ssl/private:/etc/ssl/private:ro
+
+    ports:
+      - "80:80" # HTTP (redirects to HTTPS)
+      - "443:443" # HTTPS
+      - "8080:8080" # Traefik Dashboard (restrict access in production)
+
+    environment:
+      - ACME_EMAIL=${ACME_EMAIL}
+      - TRAEFIK_DOMAIN=${TRAEFIK_DOMAIN}
+      - APP_DOMAIN=${APP_DOMAIN}
+      - API_DOMAIN=${API_DOMAIN}
+      - DNS_PROVIDER=${DNS_PROVIDER:-}
+      - TRAEFIK_AUTH_USER=${TRAEFIK_AUTH_USER}
+      - JAEGER_AGENT=${JAEGER_AGENT:-}
+
+    labels:
+      # Traefik dashboard configuration (production)
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`${TRAEFIK_DOMAIN}`)"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.middlewares=dashboard-auth@file,security-headers@file,rate-limit-strict@file"
+
+      # Metrics endpoint
+      - "traefik.http.routers.metrics.rule=Host(`${TRAEFIK_DOMAIN}`) && Path(`/metrics`)"
+      - "traefik.http.routers.metrics.entrypoints=websecure"
+      - "traefik.http.routers.metrics.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.metrics.service=prometheus@internal"
+      - "traefik.http.routers.metrics.middlewares=dashboard-auth@file,security-headers@file"
+
+    networks:
+      - qwen-network
+      - traefik-public
+      - monitoring
+
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+    security_opt:
+      - no-new-privileges:true
+
+    # Production resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
+        reservations:
+          memory: 512M
+          cpus: "0.5"
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+        labels: "service,environment"
+
+    # User configuration (non-root)
+    user: "65534:65534" # nobody user
+
+    # Read-only root filesystem
+    read_only: true
+
+    # Temporary filesystems
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+
+  # Traefik companion for certificate management
+  traefik-certs-dumper:
+    image: ldez/traefik-certs-dumper:v2.8.1
+    container_name: qwen-traefik-certs-dumper
+    restart: unless-stopped
+
+    volumes:
+      - ./ssl/acme.json:/acme.json:ro
+      - ./ssl/certs:/output
+
+    environment:
+      - DOMAIN=${APP_DOMAIN}
+
+    command:
+      - file
+      - --version=v2
+      - --watch
+      - --source=/acme.json
+      - --dest=/output
+
+    depends_on:
+      - traefik
+
+    networks:
+      - qwen-network
+
+networks:
+  qwen-network:
+    name: qwen-network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+  traefik-public:
+    name: traefik-public
+    driver: bridge
+    external: true
+
+  monitoring:
+    name: monitoring
+    driver: bridge
+    external: true
+
+volumes:
+  traefik-logs:
+    name: traefik-logs-prod
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./logs/traefik
+
+  traefik-ssl:
+    name: traefik-ssl-prod
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./ssl

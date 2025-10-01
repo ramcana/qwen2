@@ -1,0 +1,151 @@
+version: "3.8"
+
+services:
+  # API Backend Service
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+      args:
+        - ENABLE_GPU=true
+        - PYTHON_VERSION=3.11
+    image: qwen-api:latest
+    container_name: qwen-api-fullstack
+    restart: unless-stopped
+    user: "0:0" # Run as root to avoid permission issues
+
+    environment:
+      # Python and application settings
+      - PYTHONPATH=/app/src:/app/DiffSynth-Studio
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+
+      # GPU and CUDA settings
+      - CUDA_VISIBLE_DEVICES=0
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
+      # Cache directories
+      - HF_HOME=/app/cache/huggingface
+      - TORCH_HOME=/app/cache/torch
+      - DIFFSYNTH_CACHE_DIR=/app/cache/diffsynth
+      - CONTROLNET_CACHE_DIR=/app/cache/controlnet
+
+      # Feature flags
+      - ENABLE_DIFFSYNTH=true
+      - ENABLE_CONTROLNET=true
+      - ENABLE_QWEN_EDIT=true
+      - ENABLE_QWEN_IMAGE=true
+
+      # Performance optimization settings
+      - MEMORY_OPTIMIZATION=true
+      - TILED_PROCESSING_THRESHOLD=2048
+      - MAX_BATCH_SIZE=4
+
+      # API server settings
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - API_WORKERS=1
+      - API_TIMEOUT=300
+
+      # Logging settings
+      - LOG_LEVEL=INFO
+
+    volumes:
+      # Model storage
+      - ./models:/app/models
+      - ./models/diffsynth:/app/models/diffsynth
+      - ./models/controlnet:/app/models/controlnet
+
+      # Cache directories
+      - ./cache/huggingface:/app/cache/huggingface
+      - ./cache/torch:/app/cache/torch
+      - ./cache/diffsynth:/app/cache/diffsynth
+      - ./cache/controlnet:/app/cache/controlnet
+
+      # Data directories
+      - ./generated_images:/app/generated_images
+      - ./uploads:/app/uploads
+      - ./offload:/app/offload
+      - ./logs/api:/app/logs
+
+      # Configuration
+      - ./configs:/app/configs:ro
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 300s
+
+    networks:
+      - qwen-fullstack
+
+  # Frontend Service
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - NODE_ENV=production
+        - REACT_APP_API_URL=http://localhost:3000/api
+        - BUILD_OPTIMIZATION=true
+        - GENERATE_SOURCEMAP=false
+    image: qwen-frontend:latest
+    container_name: qwen-frontend-fullstack
+    restart: unless-stopped
+
+    ports:
+      - "4000:80" # Frontend on port 4000
+
+    environment:
+      - NODE_ENV=production
+      - NGINX_HOST=localhost
+      - NGINX_PORT=80
+
+    depends_on:
+      api:
+        condition: service_healthy
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 45s
+
+    networks:
+      - qwen-fullstack
+
+  # Nginx Reverse Proxy (Simple)
+  proxy:
+    image: nginx:alpine
+    container_name: qwen-proxy
+    restart: unless-stopped
+
+    ports:
+      - "3000:80" # Main entry point
+
+    volumes:
+      - ./nginx-proxy.conf:/etc/nginx/nginx.conf:ro
+
+    depends_on:
+      - api
+      - frontend
+
+    networks:
+      - qwen-fullstack
+
+networks:
+  qwen-fullstack:
+    driver: bridge
+    name: qwen-fullstack

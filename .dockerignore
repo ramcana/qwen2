@@ -1,0 +1,127 @@
+# Git and version control
+.git
+.gitignore
+.gitmodules
+
+# Python cache and virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.venv/
+.venv311/
+.venv312/
+venv/
+env/
+ENV/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs and temporary files
+*.log
+logs/
+backend.log
+frontend.log
+diffsynth_trial.log
+start.log
+
+# Test and development files
+.pytest_cache/
+.coverage
+.nyc_output
+.cache
+tests/
+examples/
+tools/debug/
+
+# Documentation and markdown files
+*.md
+docs/
+reports/
+
+# Frontend build artifacts
+frontend/node_modules/
+frontend/build/
+frontend/.yarn/
+frontend/package-lock.json
+frontend/.pnp.*
+
+# Development scripts
+dev-*.sh
+scripts/
+Makefile
+
+# Docker files (avoid recursive copying)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Monitoring and configuration
+monitoring/
+.github/
+.pre-commit-config.yaml
+.flake8
+mypy.ini
+pyproject.toml
+
+# Large model files (should be downloaded at runtime)
+models/Qwen*/
+models/*/pytorch_model*.bin
+models/*/model*.safetensors
+
+# Generated content (will be created at runtime)
+generated_images/*.png
+generated_images/*.jpg
+generated_images/*.json
+outputs/
+
+# Cache directories (will be created at runtime)
+cache/
+offload/
+
+# Performance test files
+perf_test_*.jpg
+demo_performance_results.json
+performance_metrics_demo.json
+
+# Package files
+package*.json
+*.tgz
+
+# Temporary and backup files
+*.tmp
+*.bak
+*.backup
+=0.24.0
+acme.json

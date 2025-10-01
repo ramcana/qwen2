@@ -1,0 +1,106 @@
+version: "3.8"
+
+services:
+  qwen-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+      args:
+        - ENABLE_GPU=true
+    image: qwen-image-api:gpu
+    container_name: qwen-api-server
+    restart: unless-stopped
+
+    # GPU support (requires nvidia-docker)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    # Environment variables
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+      - ENABLE_DIFFSYNTH=true
+      - ENABLE_CONTROLNET=true
+      - MEMORY_OPTIMIZATION=true
+      - TILED_PROCESSING_THRESHOLD=1024
+      - HF_HOME=/app/cache/huggingface
+      - TORCH_HOME=/app/cache/torch
+      - DIFFSYNTH_CACHE_DIR=/app/cache/diffsynth
+      - CONTROLNET_CACHE_DIR=/app/cache/controlnet
+
+    # Port mapping
+    ports:
+      - "8000:8000"
+
+    # Volume mounts for persistence
+    volumes:
+      - ./models:/app/models
+      - ./cache:/app/cache
+      - ./generated_images:/app/generated_images
+      - ./uploads:/app/uploads
+      - ./offload:/app/offload
+      - ./logs:/app/logs
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 120s
+
+    # Resource limits
+    mem_limit: 16g
+    memswap_limit: 16g
+    shm_size: 2g
+
+    # Security
+    user: "1000:1000" # Adjust to match your user ID
+    read_only: false
+
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+  # Optional: Monitoring service
+  monitoring:
+    image: prom/node-exporter:latest
+    container_name: qwen-monitoring
+    restart: unless-stopped
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.rootfs=/rootfs"
+      - "--path.sysfs=/host/sys"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+    profiles:
+      - monitoring
+
+# Networks
+networks:
+  default:
+    name: qwen-network
+    driver: bridge
+
+# Volumes for data persistence
+volumes:
+  models:
+    driver: local
+  cache:
+    driver: local
+  generated_images:
+    driver: local
+  uploads:
+    driver: local

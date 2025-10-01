@@ -1,0 +1,322 @@
+# =============================================================================
+# Development Docker Compose Configuration for Qwen2 Image Generation
+# =============================================================================
+# This configuration extends the base docker-compose.yml for development:
+# - Hot reloading for frontend development
+# - Debug logging and monitoring
+# - Development-specific environment variables
+# - Simplified SSL configuration
+# - Additional development tools and services
+# - Relaxed resource limits for development
+# - Enhanced debugging capabilities
+# =============================================================================
+
+version: "3.8"
+
+services:
+  # ==========================================================================
+  # Traefik Development Configuration
+  # ==========================================================================
+  traefik:
+    environment:
+      - TRAEFIK_LOG_LEVEL=DEBUG
+      - TRAEFIK_API_DASHBOARD=true
+      - TRAEFIK_API_INSECURE=true
+      - TRAEFIK_ACCESSLOG=true
+      - TRAEFIK_ACCESSLOG_FORMAT=json
+    volumes:
+      - ./config/docker/traefik.yml:/etc/traefik/traefik.yml:ro
+    labels:
+      - "traefik.http.middlewares.auth.basicauth.users=admin:$$2y$$10$$K8V2VzxEOJQBQjjfv7S4/.k8VKyohAyIUWH5HBslZOOF8XfLQN5S2" # admin:admin
+
+    # Development resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "1.0"
+
+    # Development logging (debug level)
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+        compress: "false"
+        labels: "service,environment"
+        tag: "{{.Name}}/{{.FullID}}"
+
+  # ==========================================================================
+  # API Development Configuration
+  # ==========================================================================
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+      target: runtime
+      args:
+        - ENABLE_GPU=true
+        - PYTHON_VERSION=3.11
+
+    # Development resource limits (more generous for debugging)
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+          cpus: "4.0"
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    environment:
+      # Development-specific settings
+      - NODE_ENV=development
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - RELOAD=true
+      - API_WORKERS=1
+
+      # Relaxed security for development
+      - CORS_ORIGINS=*
+      - CORS_ALLOW_CREDENTIALS=true
+
+      # Development performance settings
+      - MEMORY_OPTIMIZATION=false
+      - TILED_PROCESSING_THRESHOLD=1024
+      - MAX_BATCH_SIZE=2
+
+      # Development cache settings
+      - CACHE_TTL=300
+      - MODEL_CACHE_SIZE=2GB
+
+      # Development debugging
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - FLASK_DEBUG=1
+
+    # Development volume mounts (with source code mounting)
+    volumes:
+      # Source code mounting for hot reloading
+      - ./src:/app/src:ro
+      - ./configs:/app/configs:ro
+
+      # Development data directories
+      - ./models:/app/models
+      - ./cache:/app/cache
+      - ./generated_images:/app/generated_images
+      - ./uploads:/app/uploads
+      - ./offload:/app/offload
+      - ./logs:/app/logs
+
+    # Development command with auto-reload
+    command: ["python", "-u", "src/api_server.py", "--reload", "--debug"]
+
+    # Relaxed health check for development
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+      start_period: 120s
+
+    # Development ports (direct access for debugging)
+    ports:
+      - "8000:8000" # Direct API access
+      - "5678:5678" # Debug port for Python debugger
+
+    # Development logging (verbose for debugging)
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "200m"
+        max-file: "10"
+        compress: "false"
+        labels: "service,environment,version,debug"
+        tag: "{{.Name}}/{{.FullID}}"
+
+  # ==========================================================================
+  # Frontend Development Configuration
+  # ==========================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+      args:
+        - NODE_ENV=development
+        - REACT_APP_API_URL=http://qwen-api:8000/api
+        - REACT_APP_WS_URL=ws://qwen-api:8000/ws
+        - REACT_APP_BACKEND_HOST=qwen-api
+        - REACT_APP_BACKEND_PORT=8000
+        - FAST_REFRESH=true
+
+    # Development resource limits (generous for hot reloading)
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "2.0"
+
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+      - FAST_REFRESH=true
+      - GENERATE_SOURCEMAP=true
+      - REACT_APP_DEBUG=true
+      - REACT_APP_API_URL=http://qwen-api:8000/api
+      - REACT_APP_WS_URL=ws://qwen-api:8000/ws
+      - REACT_APP_BACKEND_HOST=qwen-api
+      - REACT_APP_BACKEND_PORT=8000
+
+    # Development volume mounts for hot reloading
+    volumes:
+      - ./frontend/src:/app/src:ro
+      - ./frontend/public:/app/public:ro
+      - ./frontend/package.json:/app/package.json:ro
+      - frontend-node-modules:/app/node_modules
+
+    # Development ports
+    ports:
+      - "3000:3000" # Direct frontend access
+
+    # Development command
+    command: ["npm", "start"]
+
+    # Development health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    # Development logging (verbose for debugging)
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+        compress: "false"
+        labels: "service,environment"
+        tag: "{{.Name}}/{{.FullID}}"
+
+  # ==========================================================================
+  # Development Tools and Services
+  # ==========================================================================
+
+  # Redis for development caching and session storage
+  redis:
+    image: redis:7-alpine
+    container_name: qwen-redis-dev
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - qwen-network
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # PostgreSQL for development database (if needed)
+  postgres:
+    image: postgres:15-alpine
+    container_name: qwen-postgres-dev
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=qwen_dev
+      - POSTGRES_USER=qwen
+      - POSTGRES_PASSWORD=qwen_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    networks:
+      - qwen-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qwen -d qwen_dev"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    profiles:
+      - database
+
+  # Mailhog for development email testing
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: qwen-mailhog-dev
+    restart: unless-stopped
+    ports:
+      - "1025:1025" # SMTP
+      - "8025:8025" # Web UI
+    networks:
+      - qwen-network
+    profiles:
+      - email
+
+  # Development file browser for easy file management
+  filebrowser:
+    image: filebrowser/filebrowser:latest
+    container_name: qwen-filebrowser-dev
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./:/srv
+      - filebrowser-config:/config
+    networks:
+      - qwen-network
+    environment:
+      - FB_BASEURL=/files
+    profiles:
+      - tools
+
+# =============================================================================
+# Development Networks
+# =============================================================================
+networks:
+  qwen-network:
+    driver: bridge
+    name: qwen-network-dev
+
+# =============================================================================
+# Development Volumes
+# =============================================================================
+volumes:
+  # Development-specific volumes
+  frontend-node-modules:
+    driver: local
+    labels:
+      - "com.qwen.volume.description=Frontend node_modules for development"
+
+  redis-data:
+    driver: local
+    labels:
+      - "com.qwen.volume.description=Redis data for development"
+
+  postgres-data:
+    driver: local
+    labels:
+      - "com.qwen.volume.description=PostgreSQL data for development"
+
+  filebrowser-config:
+    driver: local
+    labels:
+      - "com.qwen.volume.description=File browser configuration"
+
+# =============================================================================
+# Development Configuration Labels
+# =============================================================================
+x-development-labels: &dev-labels
+  com.qwen.project: "qwen2-image-generation"
+  com.qwen.version: "2.0.0-dev"
+  com.qwen.environment: "development"
+  com.qwen.maintainer: "Qwen Team"
+  com.qwen.hot-reload: "enabled"

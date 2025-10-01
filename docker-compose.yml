@@ -1,87 +1,578 @@
+# =============================================================================
+# Comprehensive Docker Compose Configuration for Qwen2 Image Generation
+# =============================================================================
+# This configuration provides a complete containerized environment with:
+# - Traefik reverse proxy with SSL termination
+# - FastAPI backend with GPU support and DiffSynth integration
+# - React frontend with optimized nginx serving
+# - Persistent volumes for models, cache, and generated content
+# - Proper networking and service dependencies
+# =============================================================================
+
 services:
-  # Traefik reverse proxy
+  # ==========================================================================
+  # Traefik Reverse Proxy Service
+  # ==========================================================================
   traefik:
     image: traefik:v3.0
     container_name: qwen-traefik
     restart: unless-stopped
+
+    # Port mappings
     ports:
-      - "80:80"
-      - "8080:8080" # Traefik dashboard
+      - "80:80" # HTTP
+      - "443:443" # HTTPS
+      - "9090:8080" # Traefik dashboard
+
+    # Volume mounts
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./config/docker/traefik.yml:/etc/traefik/traefik.yml:ro
       - ./acme.json:/acme.json
+      - traefik-logs:/var/log/traefik
+
+    # Environment variables
+    environment:
+      - TRAEFIK_LOG_LEVEL=INFO
+      - TRAEFIK_API_DASHBOARD=true
+      - TRAEFIK_API_INSECURE=true
+
+    # Networks (Traefik in DMZ and management)
     networks:
       - qwen-network
+      - traefik-public
+
+    # Labels for Traefik dashboard access
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.traefik.rule=Host(`traefik.localhost`)"
-      - "traefik.http.routers.traefik.service=api@internal"
+      - "traefik.docker.network=qwen-network"
+      - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.localhost`) || Host(`dashboard.localhost`)"
+      - "traefik.http.routers.traefik-dashboard.service=api@internal"
+      - "traefik.http.routers.traefik-dashboard.middlewares=auth"
+      - "traefik.http.middlewares.auth.basicauth.users=admin:$$2y$$10$$K8V2VzxEOJQBQjjfv7S4/.k8VKyohAyIUWH5HBslZOOF8XfLQN5S2" # admin:admin
 
-  # API Server with DiffSynth Enhanced UI
+    # Health check with improved configuration
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 60s
+
+    # Resource limits for stability
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "1.0"
+        reservations:
+          memory: 256m
+          cpus: "0.5"
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+
+  # ==========================================================================
+  # API Server Service (FastAPI with DiffSynth Integration)
+  # ==========================================================================
   api:
     build:
       context: .
       dockerfile: Dockerfile.api
+      args:
+        - ENABLE_GPU=true
+        - PYTHON_VERSION=3.11
+    image: qwen-api:latest
     container_name: qwen-api
     restart: unless-stopped
-    volumes:
-      - ./generated_images:/app/generated_images
-      - ./uploads:/app/uploads
-      - ./cache:/app/cache
-      - ./models:/app/models
-      - ./offload:/app/offload
-      - ~/.cache/huggingface:/app/cache/huggingface
-      - ~/.cache/torch:/app/cache/torch
+
+    # GPU access configuration (requires nvidia-docker runtime)
+
+    # Environment variables for API service
     environment:
-      - PYTHONPATH=/app/src
+      # Python and application settings
+      - PYTHONPATH=/app/src:/app/DiffSynth-Studio
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+
+      # GPU and CUDA settings
+      - CUDA_VISIBLE_DEVICES=0
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
+      # Cache directories
       - HF_HOME=/app/cache/huggingface
       - TORCH_HOME=/app/cache/torch
-      - CUDA_VISIBLE_DEVICES=0
       - DIFFSYNTH_CACHE_DIR=/app/cache/diffsynth
       - CONTROLNET_CACHE_DIR=/app/cache/controlnet
+
+      # Feature flags
       - ENABLE_DIFFSYNTH=true
       - ENABLE_CONTROLNET=true
+      - ENABLE_QWEN_EDIT=true
+      - ENABLE_QWEN_IMAGE=true
+
+      # Performance optimization settings
       - MEMORY_OPTIMIZATION=true
       - TILED_PROCESSING_THRESHOLD=2048
+      - MAX_BATCH_SIZE=4
+      - ATTENTION_OPTIMIZATION=true
+
+      # GPU memory management
+      - GPU_MEMORY_FRACTION=0.9
+      - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
+      - CUDA_LAUNCH_BLOCKING=0
+
+      # Resource management and cleanup
+      - AUTO_CLEANUP_ENABLED=true
+      - CLEANUP_INTERVAL=3600
+      - MAX_CACHE_SIZE=8GB
+      - LOG_ROTATION_ENABLED=true
+
+      # API server settings
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - API_WORKERS=1
+      - API_TIMEOUT=300
+      - MAX_REQUEST_SIZE=100MB
+
+      # Logging settings
+      - LOG_LEVEL=INFO
+      - LOG_FORMAT=json
+      - ACCESS_LOG=true
+
+    # Persistent volume mounts
+    volumes:
+      # Model storage
+      - models:/app/models
+      - diffsynth-models:/app/models/diffsynth
+      - controlnet-models:/app/models/controlnet
+
+      # Cache directories
+      - huggingface-cache:/app/cache/huggingface
+      - torch-cache:/app/cache/torch
+      - diffsynth-cache:/app/cache/diffsynth
+      - controlnet-cache:/app/cache/controlnet
+
+      # Data directories
+      - generated-images:/app/generated_images
+      - uploads:/app/uploads
+      - offload:/app/offload
+
+      # Logs
+      - api-logs:/app/logs
+
+      # Configuration
+      - ./configs:/app/configs:ro
+
+      # Resource management scripts
+      - ./scripts/resource-cleanup.sh:/usr/local/bin/resource-cleanup.sh:ro
+      - ./scripts/gpu-memory-manager.sh:/usr/local/bin/gpu-memory-manager.sh:ro
+      - ./scripts/disk-space-monitor.sh:/usr/local/bin/disk-space-monitor.sh:ro
+      - ./config/docker/logrotate.conf:/etc/logrotate.d/qwen:ro
+
+    # Networks (API in backend network for security isolation)
     networks:
       - qwen-network
+      - qwen-backend
+
+    # Service dependencies
+    depends_on:
+      traefik:
+        condition: service_healthy
+
+    # Traefik labels for routing
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.api.rule=Host(`api.localhost`)"
+      - "traefik.docker.network=qwen-network"
+
+      # API routes
+      - "traefik.http.routers.api.rule=Host(`api.localhost`) || PathPrefix(`/api`)"
       - "traefik.http.routers.api.service=api"
       - "traefik.http.services.api.loadbalancer.server.port=8000"
+
+      # Health check route
+      - "traefik.http.routers.api-health.rule=Path(`/health`)"
+      - "traefik.http.routers.api-health.service=api"
+
+      # WebSocket support
+      - "traefik.http.routers.api-ws.rule=Host(`api.localhost`) && PathPrefix(`/ws`)"
+      - "traefik.http.routers.api-ws.service=api"
+
+      # Middleware for CORS and rate limiting
+      - "traefik.http.routers.api.middlewares=api-cors,api-ratelimit"
+      - "traefik.http.middlewares.api-cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS"
+      - "traefik.http.middlewares.api-cors.headers.accesscontrolalloworiginlist=*"
+      - "traefik.http.middlewares.api-cors.headers.accesscontrolallowheaders=*"
+      - "traefik.http.middlewares.api-ratelimit.ratelimit.burst=100"
+      - "traefik.http.middlewares.api-ratelimit.ratelimit.average=50"
+
+    # Comprehensive health check with multiple endpoints
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "curl",
+          "-f",
+          "http://localhost:8000/health",
+          "||",
+          "curl",
+          "-f",
+          "http://localhost:8000/health/live",
+          "||",
+          "exit",
+          "1",
+        ]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 300s # Allow more time for model loading
+
+    # Enhanced resource management with GPU optimization
     deploy:
       resources:
+        limits:
+          memory: 16G
+          cpus: "8.0"
         reservations:
+          memory: 8G
+          cpus: "4.0"
           devices:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
-        limits:
-          memory: 16G
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 120s
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 300s
 
-  # React Frontend
+    # Resource limits and security
+    shm_size: 2g
+    security_opt:
+      - no-new-privileges:true
+      - seccomp:unconfined
+
+    # Capability management for security
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+
+    # System limits for better performance
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+      nproc:
+        soft: 32768
+        hard: 32768
+
+    # Temporary filesystem for better performance
+    tmpfs:
+      - /tmp:size=2G,mode=1777
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+        compress: "true"
+
+  # ==========================================================================
+  # Frontend Service (React with Nginx)
+  # ==========================================================================
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        - NODE_ENV=production
+        - REACT_APP_API_URL=/api
+        - REACT_APP_WS_URL=/ws
+        - REACT_APP_CONTAINER_MODE=true
+        - REACT_APP_BACKEND_HOST=qwen-api
+        - REACT_APP_BACKEND_PORT=8000
+        - BUILD_OPTIMIZATION=true
+        - GENERATE_SOURCEMAP=false
+    image: qwen-frontend:latest
     container_name: qwen-frontend
     restart: unless-stopped
+
+    # Environment variables for frontend
+    environment:
+      - NODE_ENV=production
+      - NGINX_HOST=localhost
+      - NGINX_PORT=80
+      - REACT_APP_CONTAINER_MODE=true
+      - REACT_APP_API_URL=/api
+      - REACT_APP_WS_URL=/ws
+      - REACT_APP_BACKEND_HOST=qwen-api
+      - REACT_APP_BACKEND_PORT=8000
+
+    # Networks
     networks:
       - qwen-network
+
+    # Service dependencies
+    depends_on:
+      api:
+        condition: service_healthy
+
+    # Traefik labels for routing
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=Host(`qwen.localhost`) || Host(`frontend.localhost`)"
+      - "traefik.docker.network=qwen-network"
+
+      # Frontend routes
+      - "traefik.http.routers.frontend.rule=Host(`qwen.localhost`) || Host(`localhost`) || Host(`frontend.localhost`)"
       - "traefik.http.routers.frontend.service=frontend"
       - "traefik.http.services.frontend.loadbalancer.server.port=80"
 
+      # Static assets with caching
+      - "traefik.http.routers.frontend-static.rule=Host(`qwen.localhost`) && PathPrefix(`/static`)"
+      - "traefik.http.routers.frontend-static.service=frontend"
+      - "traefik.http.routers.frontend-static.middlewares=static-cache"
+      - "traefik.http.middlewares.static-cache.headers.customrequestheaders.Cache-Control=public, max-age=31536000"
+
+      # Security headers
+      - "traefik.http.routers.frontend.middlewares=frontend-security"
+      - "traefik.http.middlewares.frontend-security.headers.frameDeny=true"
+      - "traefik.http.middlewares.frontend-security.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.frontend-security.headers.browserXssFilter=true"
+      - "traefik.http.middlewares.frontend-security.headers.referrerPolicy=strict-origin-when-cross-origin"
+
+    # Enhanced health check using custom script
+    healthcheck:
+      test: ["CMD", "node", "/usr/local/bin/health-check.js", "simple"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 45s
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "1.0"
+
+    # Security hardening
+    security_opt:
+      - no-new-privileges:true
+      - seccomp:unconfined
+    read_only: true
+    tmpfs:
+      - /tmp:size=100m,mode=1777,noexec,nosuid,nodev
+      - /var/cache/nginx:size=100m,mode=755,noexec,nosuid,nodev
+      - /var/run:size=10m,mode=755,noexec,nosuid,nodev
+
+    # Capability management
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - SETGID
+      - SETUID
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+        compress: "true"
+
+# =============================================================================
+# Network Configuration with Security Isolation
+# =============================================================================
 networks:
+  # Frontend DMZ network for public-facing services
   qwen-network:
     driver: bridge
+    name: qwen-network
+    ipam:
+      config:
+        - subnet: 172.25.0.0/16
+          gateway: 172.25.0.1
+    driver_opts:
+      com.docker.network.bridge.enable_icc: "false"
+      com.docker.network.bridge.enable_ip_masquerade: "true"
+    labels:
+      - "com.qwen.network.description=Internal network for Qwen services"
+      - "com.qwen.network.zone=dmz"
+      - "com.qwen.network.security=public"
+
+  # Backend internal network for API and processing services
+  qwen-backend:
+    driver: bridge
+    name: qwen-backend
+    internal: false # Needs external access for model downloads
+    ipam:
+      config:
+        - subnet: 172.25.1.0/24
+          gateway: 172.25.1.1
+    driver_opts:
+      com.docker.network.bridge.enable_icc: "true"
+    labels:
+      - "com.qwen.network.description=Backend services network"
+      - "com.qwen.network.zone=internal"
+      - "com.qwen.network.security=private"
+
+  # External network for Traefik (shared with other projects)
+  traefik-public:
+    external: true
+    name: traefik-public
+
+# =============================================================================
+# Volume Configuration for Data Persistence
+# =============================================================================
+volumes:
+  # Model storage volumes
+  models:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./models
+    labels:
+      - "com.qwen.volume.description=Main model storage"
+
+  diffsynth-models:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./models/diffsynth
+    labels:
+      - "com.qwen.volume.description=DiffSynth model storage"
+
+  controlnet-models:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./models/controlnet
+    labels:
+      - "com.qwen.volume.description=ControlNet model storage"
+
+  # Cache volumes for better performance
+  huggingface-cache:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./cache/huggingface
+    labels:
+      - "com.qwen.volume.description=HuggingFace model cache"
+
+  torch-cache:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./cache/torch
+    labels:
+      - "com.qwen.volume.description=PyTorch model cache"
+
+  diffsynth-cache:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./cache/diffsynth
+    labels:
+      - "com.qwen.volume.description=DiffSynth cache storage"
+
+  controlnet-cache:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./cache/controlnet
+    labels:
+      - "com.qwen.volume.description=ControlNet cache storage"
+
+  # Data volumes
+  generated-images:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./generated_images
+    labels:
+      - "com.qwen.volume.description=Generated image storage"
+
+  uploads:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./uploads
+    labels:
+      - "com.qwen.volume.description=User upload storage"
+
+  offload:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./offload
+    labels:
+      - "com.qwen.volume.description=Model offload storage"
+
+  # Log volumes
+  api-logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./logs/api
+    labels:
+      - "com.qwen.volume.description=API server logs"
+
+  traefik-logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./logs/traefik
+    labels:
+      - "com.qwen.volume.description=Traefik proxy logs"
+
+# =============================================================================
+# Configuration Labels and Metadata
+# =============================================================================
+x-common-labels: &common-labels
+  com.qwen.project: "qwen2-image-generation"
+  com.qwen.version: "2.0.0"
+  com.qwen.environment: "development"
+  com.qwen.maintainer: "Qwen Team"
+
+# =============================================================================
+# Extension Fields for Reusable Configuration
+# =============================================================================
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "100m"
+    max-file: "3"
+    compress: "true"
+
+x-restart-policy: &restart-policy
+  restart: unless-stopped
+
+x-security: &security-opts
+  security_opt:
+    - no-new-privileges:true
